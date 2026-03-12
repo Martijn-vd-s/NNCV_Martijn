@@ -32,6 +32,9 @@ from torchvision.transforms.v2 import (
     ToDtype,
     InterpolationMode
 )
+import segmentation_models_pytorch as smp # maybe later for comining crossentorpy loss with dice ??
+from torchmetrics.classification import Dice
+
 
 from model import Model
 
@@ -149,6 +152,9 @@ def main(args):
     # Define the loss function
     criterion = nn.CrossEntropyLoss(ignore_index=255)  # Ignore the void class
 
+    # Dice metric for evaluation (not used in training, but can be logged during validation)
+    dice_metric = Dice(num_classes=19, average='macro', ignore_index=255).to(device)
+
     # Define the optimizer
     optimizer = AdamW(model.parameters(), lr=args.lr)
 
@@ -183,6 +189,10 @@ def main(args):
         model.eval()
         with torch.no_grad():
             losses = []
+
+            # Reset the dice metric at the start of validation
+            dice_metric.reset()
+
             for i, (images, labels) in enumerate(valid_dataloader):
 
                 labels = convert_to_train_id(labels)  # Convert class IDs to train IDs
@@ -193,6 +203,10 @@ def main(args):
                 outputs = model(images)
                 loss = criterion(outputs, labels)
                 losses.append(loss.item())
+
+                # Update the dice metric with the current batch's predictions and labels
+                predictions = outputs.argmax(dim=1)
+                dice_metric.update(predictions, labels)
             
                 if i == 0:
                     predictions = outputs.softmax(1).argmax(1)
@@ -215,8 +229,11 @@ def main(args):
                     }, step=(epoch + 1) * len(train_dataloader) - 1)
             
             valid_loss = sum(losses) / len(losses)
+            mean_dice_score = dice_metric.compute()
+
             wandb.log({
-                "valid_loss": valid_loss
+                "valid_loss": valid_loss,
+                "valid_dice_score": mean_dice_score,
             }, step=(epoch + 1) * len(train_dataloader) - 1)
 
             if valid_loss < best_valid_loss:

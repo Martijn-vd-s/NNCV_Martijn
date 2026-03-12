@@ -1,6 +1,18 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
+# https://github.com/facebookresearch/dinov3
+# dino citation: 
+# @misc{simeoni2025dinov3,
+#   title={{DINOv3}},
+#   author={Sim{\'e}oni, Oriane and Vo, Huy V. and Seitzer, Maximilian and Baldassarre, Federico and Oquab, Maxime and Jose, Cijo and Khalidov, Vasil and Szafraniec, Marc and Yi, Seungeun and Ramamonjisoa, Micha{\"e}l and Massa, Francisco and Haziza, Daniel and Wehrstedt, Luca and Wang, Jianyuan and Darcet, Timoth{\'e}e and Moutakanni, Th{\'e}o and Sentana, Leonel and Roberts, Claire and Vedaldi, Andrea and Tolan, Jamie and Brandt, John and Couprie, Camille and Mairal, Julien and J{\'e}gou, Herv{\'e} and Labatut, Patrick and Bojanowski, Piotr},
+#   year={2025},
+#   eprint={2508.10104},
+#   archivePrefix={arXiv},
+#   primaryClass={cs.CV},
+#   url={https://arxiv.org/abs/2508.10104},
+# }
 
 class Model(nn.Module):
     """ 
@@ -25,14 +37,28 @@ class Model(nn.Module):
         """
         
         super().__init__()
+        self.in_channels = in_channels
+
+        # import 🦖 v3 
+        self.dino = torch.hub.load("facebookresearch/dinov3", "dinov3_vitb16", pretrained=True)
+        # freeze DINO for now, we only train the decode, maybe later we can compare what the influence would be if we fine tune the model
+        for param in self.dino.parameters():
+            param.requires_grad = False
+
+        # projection layers to match the CNN 
+        self.proj1 = nn.Conv2d(768, 64, kernel_size=1) 
+        self.proj2 = nn.Conv2d(768, 128, kernel_size=1)
+        self.proj3 = nn.Conv2d(768, 256, kernel_size=1)
+        self.proj4 = nn.Conv2d(768, 512, kernel_size=1)
+        self.proj5 = nn.Conv2d(768, 512, kernel_size=1)
 
         # Encoding path
-        self.in_channels = in_channels
+        # self.in_channels = in_channels
         self.inc = (DoubleConv(in_channels, 64))
         self.down1 = (Down(64, 128))
         self.down2 = (Down(128, 256))
         self.down3 = (Down(256, 512))
-        self.down4 = (Down(512, 512))
+        # self.down4 = (Down(512, 512))
 
         # Decoding path
         self.up1 = (Up(1024, 256))
@@ -52,12 +78,24 @@ class Model(nn.Module):
         if x.shape[1] != self.in_channels:
             raise ValueError(f"Expected {self.in_channels} input channels, but got {x.shape[1]}")
         
+
         # Encoding path
         x1 = self.inc(x)
         x2 = self.down1(x1)
         x3 = self.down2(x2)
         x4 = self.down3(x3)
         x5 = self.down4(x4)
+
+        # DINOv3 features
+        dino_features = self.dino.forward_features(x)['x_norm_patchtokens']
+        x_dino = dino_features.permute(0, 2, 1).reshape(x.shape[0], 768, x.shape[2] // 16, x.shape[3] // 16)  # Reshape to (B, C, H/16, W/16)
+
+        # fusion of DINOv3 features and CNN features
+        x1 = x1 + F.interpolate(self.proj1(x_dino), size=x1.shape[2:], mode='bilinear', align_corners=False)
+        x2 = x2 + F.interpolate(self.proj2(x_dino), size=x2.shape[2:], mode='bilinear', align_corners=False)
+        x3 = x3 + F.interpolate(self.proj3(x_dino), size=x3.shape[2:], mode='bilinear', align_corners=False)
+        x4 = x4 + F.interpolate(self.proj4(x_dino), size=x4.shape[2:], mode='bilinear', align_corners=False)
+        x5 = self.proj5(x_dino) # just use the DINO features for the bottleneck
 
         # Decoding path
         x = self.up1(x5, x4)
@@ -68,7 +106,6 @@ class Model(nn.Module):
 
         return logits
         
-
 class DoubleConv(nn.Module):
     """(convolution => [BN] => ReLU) * 2"""
 
@@ -124,3 +161,7 @@ class OutConv(nn.Module):
 
     def forward(self, x):
         return self.conv(x)
+    
+
+if __name__ == "__main__":
+    model = Model()

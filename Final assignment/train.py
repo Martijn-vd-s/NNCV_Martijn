@@ -12,6 +12,8 @@ allowing you to easily modify hyperparameters using a command-line argument pars
 
 Feel free to customize the script as needed for your use case.
 """
+# https://huggingface.co/docs/transformers/en/model_doc/dinov3 inspiration
+
 import os
 from argparse import ArgumentParser
 

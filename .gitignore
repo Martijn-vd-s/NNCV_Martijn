@@ -3,6 +3,13 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# test images for docker
+local_data/
+local_output/
+
+*.tar
+
+
 # C extensions
 *.so
 

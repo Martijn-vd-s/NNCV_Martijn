@@ -1,0 +1,68 @@
+_wandb:
+    value:
+        cli_version: 0.24.2
+        e:
+            x9mm76viwxi4avtfz01jla6rbyb74dyc:
+                codePath: Final assignment\train.py
+                codePathLocal: Final assignment\train.py
+                cpu_count: 8
+                cpu_count_logical: 16
+                cudaVersion: "12.9"
+                disk:
+                    /:
+                        total: "511113687040"
+                        used: "509550067712"
+                email: m.v.d.sande@student.tue.nl
+                executable: C:\Users\marti\anaconda3\envs\nncv\python.exe
+                git:
+                    commit: a76e5aeb0f2f26958f1bc3e8440151875974d756
+                    remote: https://github.com/Martijn-vd-s/NNCV_Martijn.git
+                gpu: NVIDIA GeForce RTX 3070 Laptop GPU
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Ampere
+                      cudaCores: 5120
+                      memoryTotal: "8589934592"
+                      name: NVIDIA GeForce RTX 3070 Laptop GPU
+                      uuid: GPU-a6c1a9e1-3f59-bea4-5445-2943b9fa76c7
+                host: Martijn
+                memory:
+                    total: "17024741376"
+                os: Windows-10-10.0.26200-SP0
+                program: c:\Users\marti\OneDrive\Documenten\1. TUe\Master AI&ES\Year 1\5LSM0 (2025-GS3) Neural networks for computer vision\Assignment\NNCV_Martijn\Final assignment\train.py
+                python: CPython 3.10.19
+                root: C:\Users\marti\OneDrive\Documenten\1. TUe\Master AI&ES\Year 1\5LSM0 (2025-GS3) Neural networks for computer vision\Assignment\NNCV_Martijn
+                startedAt: "2026-03-12T15:12:56.009900Z"
+                writerId: x9mm76viwxi4avtfz01jla6rbyb74dyc
+        m: []
+        python_version: 3.10.19
+        t:
+            "1":
+                - 1
+                - 41
+            "2":
+                - 1
+                - 41
+            "3":
+                - 13
+                - 16
+            "4": 3.10.19
+            "5": 0.24.2
+            "8":
+                - 3
+            "12": 0.24.2
+            "13": windows-amd64
+batch_size:
+    value: 64
+data_dir:
+    value: ./data/cityscapes
+epochs:
+    value: 10
+experiment_id:
+    value: unet-training
+lr:
+    value: 0.001
+num_workers:
+    value: 10
+seed:
+    value: 42

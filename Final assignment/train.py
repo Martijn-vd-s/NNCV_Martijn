@@ -33,7 +33,7 @@ from torchvision.transforms.v2 import (
     InterpolationMode
 )
 # import segmentation_models_pytorch as smp # maybe later for comining crossentorpy loss with dice ??
-from torchmetrics.classification import Dice
+from torchmetrics.classification import MulticlassF1Score
 
 
 from model import Model
@@ -153,7 +153,7 @@ def main(args):
     criterion = nn.CrossEntropyLoss(ignore_index=255)  # Ignore the void class
 
     # Dice metric for evaluation (not used in training, but can be logged during validation)
-    dice_metric = Dice(num_classes=19, average='macro', ignore_index=255).to(device)
+    dice_metric = MulticlassF1Score(num_classes=19, average='macro', ignore_index=255).to(device)
 
     # Define the optimizer
     optimizer = AdamW(model.parameters(), lr=args.lr)

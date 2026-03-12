@@ -32,7 +32,7 @@ from torchvision.transforms.v2 import (
     ToDtype,
     InterpolationMode
 )
-# import segmentation_models_pytorch as smp # maybe later for comining crossentorpy loss with dice ??
+import segmentation_models_pytorch as smp 
 from torchmetrics.classification import MulticlassF1Score
 
 
@@ -151,12 +151,15 @@ def main(args):
 
     # Define the loss function
     criterion = nn.CrossEntropyLoss(ignore_index=255)  # Ignore the void class
+    dice_criterion = smp.losses.DiceLoss(mode='multiclass', classes=19, ignore_index=255)  # Dice loss for multi-class segmentation
 
     # Dice metric for evaluation (not used in training, but can be logged during validation)
     dice_metric = MulticlassF1Score(num_classes=19, average='macro', ignore_index=255).to(device)
 
-    # Define the optimizer
-    optimizer = AdamW(model.parameters(), lr=args.lr)
+    # Define the optimizer -- add weight dacay for regularization
+    optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
+    # Learning rate scheduler -- maybe later we can compare with other schedulers like ReduceLROnPlateau or OneCycleLR
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
 
     # Training loop
     best_valid_loss = float('inf')
@@ -175,7 +178,14 @@ def main(args):
 
             optimizer.zero_grad()
             outputs = model(images)
-            loss = criterion(outputs, labels)
+
+            # Compute the combined loss (cross-entropy + dice loss)
+            crossEntropy_loss = criterion(outputs, labels)
+            dice_loss = dice_criterion(outputs, labels)
+
+            # Coombine the losses
+            loss = crossEntropy_loss + dice_loss
+
             loss.backward()
             optimizer.step()
 
@@ -201,7 +211,13 @@ def main(args):
                 labels = labels.long().squeeze(1)  # Remove channel dimension
 
                 outputs = model(images)
-                loss = criterion(outputs, labels)
+                # Compute the combined loss (cross-entropy + dice loss)
+                crossEntropy_loss = criterion(outputs, labels)
+                dice_loss = dice_criterion(outputs, labels)
+
+                # Coombine the losses
+                loss = crossEntropy_loss + dice_loss
+                
                 losses.append(loss.item())
 
                 # Update the dice metric with the current batch's predictions and labels
@@ -245,7 +261,10 @@ def main(args):
                     f"best_model-epoch={epoch:04}-val_loss={valid_loss:04}.pt"
                 )
                 torch.save(model.state_dict(), current_best_model_path)
-        
+
+        # Step the learning rate scheduler at the end of each epoch
+        scheduler.step()
+
     print("Training complete!")
 
     # Save the model

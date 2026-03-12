@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 # https://github.com/facebookresearch/dinov3
-# dino citation: 
+# dino citation:
 # @misc{simeoni2025dinov3,
 #   title={{DINOv3}},
 #   author={Sim{\'e}oni, Oriane and Vo, Huy V. and Seitzer, Maximilian and Baldassarre, Federico and Oquab, Maxime and Jose, Cijo and Khalidov, Vasil and Szafraniec, Marc and Yi, Seungeun and Ramamonjisoa, Micha{\"e}l and Massa, Francisco and Haziza, Daniel and Wehrstedt, Luca and Wang, Jianyuan and Darcet, Timoth{\'e}e and Moutakanni, Th{\'e}o and Sentana, Leonel and Roberts, Claire and Vedaldi, Andrea and Tolan, Jamie and Brandt, John and Couprie, Camille and Mairal, Julien and J{\'e}gou, Herv{\'e} and Labatut, Patrick and Bojanowski, Piotr},
@@ -14,8 +14,9 @@ import torch.nn.functional as F
 #   url={https://arxiv.org/abs/2508.10104},
 # }
 
+
 class Model(nn.Module):
-    """ 
+    """
     A simple U-Net architecture for image segmentation.
     Based on the U-Net architecture from the original paper:
     Olaf Ronneberger et al. (2015), "U-Net: Convolutional Networks for Biomedical Image Segmentation"
@@ -25,28 +26,27 @@ class Model(nn.Module):
     however, the CodaLab server requires the model class to be named "Model". Also, it will use the default values of the constructor
     to create the model, so make sure to set the default values of the constructor to the ones you want to use for your submission.
     """
-    def __init__(
-        self, 
-        in_channels=3, 
-        n_classes=19
-    ):
+
+    def __init__(self, in_channels=3, n_classes=19):
         """
         Args:
             in_channels (int): Number of input channels. Default is 3 for RGB images.
             n_classes (int): Number of output classes. Default is 19 for the Cityscapes dataset.
         """
-        
+
         super().__init__()
         self.in_channels = in_channels
 
-        # import 🦖 v3 
-        self.dino = torch.hub.load("facebookresearch/dinov3", "dinov3_vitb16", pretrained=True)
+        # import 🦖 v3
+        self.dino = torch.hub.load(
+            "facebookresearch/dinov3", "dinov3_vitb16", pretrained=True
+        )
         # freeze DINO for now, we only train the decode, maybe later we can compare what the influence would be if we fine tune the model
         for param in self.dino.parameters():
             param.requires_grad = False
 
-        # projection layers to match the CNN 
-        self.proj1 = nn.Conv2d(768, 64, kernel_size=1) 
+        # projection layers to match the CNN
+        self.proj1 = nn.Conv2d(768, 64, kernel_size=1)
         self.proj2 = nn.Conv2d(768, 128, kernel_size=1)
         self.proj3 = nn.Conv2d(768, 256, kernel_size=1)
         self.proj4 = nn.Conv2d(768, 512, kernel_size=1)
@@ -54,18 +54,18 @@ class Model(nn.Module):
 
         # Encoding path
         # self.in_channels = in_channels
-        self.inc = (DoubleConv(in_channels, 64))
-        self.down1 = (Down(64, 128))
-        self.down2 = (Down(128, 256))
-        self.down3 = (Down(256, 512))
-        self.down4 = (Down(512, 512))
+        self.inc = DoubleConv(in_channels, 64)
+        self.down1 = Down(64, 128)
+        self.down2 = Down(128, 256)
+        self.down3 = Down(256, 512)
+        self.down4 = Down(512, 512)
 
         # Decoding path
-        self.up1 = (Up(1024, 256))
-        self.up2 = (Up(512, 128))
-        self.up3 = (Up(256, 64))
-        self.up4 = (Up(128, 64))
-        self.outc = (OutConv(64, n_classes))
+        self.up1 = Up(1024, 256)
+        self.up2 = Up(512, 128)
+        self.up3 = Up(256, 64)
+        self.up4 = Up(128, 64)
+        self.outc = OutConv(64, n_classes)
 
     def forward(self, x):
         """
@@ -76,8 +76,9 @@ class Model(nn.Module):
         """
         # Check if the input tensor has the expected number of channels
         if x.shape[1] != self.in_channels:
-            raise ValueError(f"Expected {self.in_channels} input channels, but got {x.shape[1]}")
-        
+            raise ValueError(
+                f"Expected {self.in_channels} input channels, but got {x.shape[1]}"
+            )
 
         # Encoding path
         x1 = self.inc(x)
@@ -87,15 +88,25 @@ class Model(nn.Module):
         x5 = self.down4(x4)
 
         # DINOv3 features
-        dino_features = self.dino.forward_features(x)['x_norm_patchtokens']
-        x_dino = dino_features.permute(0, 2, 1).reshape(x.shape[0], 768, x.shape[2] // 16, x.shape[3] // 16)  # Reshape to (B, C, H/16, W/16)
+        dino_features = self.dino.forward_features(x)["x_norm_patchtokens"]
+        x_dino = dino_features.permute(0, 2, 1).reshape(
+            x.shape[0], 768, x.shape[2] // 16, x.shape[3] // 16
+        )  # Reshape to (B, C, H/16, W/16)
 
         # fusion of DINOv3 features and CNN features
-        x1 = x1 + F.interpolate(self.proj1(x_dino), size=x1.shape[2:], mode='bilinear', align_corners=False)
-        x2 = x2 + F.interpolate(self.proj2(x_dino), size=x2.shape[2:], mode='bilinear', align_corners=False)
-        x3 = x3 + F.interpolate(self.proj3(x_dino), size=x3.shape[2:], mode='bilinear', align_corners=False)
-        x4 = x4 + F.interpolate(self.proj4(x_dino), size=x4.shape[2:], mode='bilinear', align_corners=False)
-        x5 = self.proj5(x_dino) # just use the DINO features for the bottleneck
+        x1 = x1 + F.interpolate(
+            self.proj1(x_dino), size=x1.shape[2:], mode="bilinear", align_corners=False
+        )
+        x2 = x2 + F.interpolate(
+            self.proj2(x_dino), size=x2.shape[2:], mode="bilinear", align_corners=False
+        )
+        x3 = x3 + F.interpolate(
+            self.proj3(x_dino), size=x3.shape[2:], mode="bilinear", align_corners=False
+        )
+        x4 = x4 + F.interpolate(
+            self.proj4(x_dino), size=x4.shape[2:], mode="bilinear", align_corners=False
+        )
+        x5 = self.proj5(x_dino)  # just use the DINO features for the bottleneck
 
         # Decoding path
         x = self.up1(x5, x4)
@@ -105,7 +116,8 @@ class Model(nn.Module):
         logits = self.outc(x)
 
         return logits
-        
+
+
 class DoubleConv(nn.Module):
     """(convolution => [BN] => ReLU) * 2"""
 
@@ -119,7 +131,7 @@ class DoubleConv(nn.Module):
             nn.ReLU(inplace=True),
             nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True)
+            nn.ReLU(inplace=True),
         )
 
     def forward(self, x):
@@ -132,8 +144,7 @@ class Down(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.maxpool_conv = nn.Sequential(
-            nn.MaxPool2d(2),
-            DoubleConv(in_channels, out_channels)
+            nn.MaxPool2d(2), DoubleConv(in_channels, out_channels)
         )
 
     def forward(self, x):
@@ -145,9 +156,9 @@ class Up(nn.Module):
 
     def __init__(self, in_channels, out_channels, bilinear=True):
         super().__init__()
-        self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+        self.up = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)
         self.conv = DoubleConv(in_channels, out_channels, in_channels // 2)
-        
+
     def forward(self, x1, x2):
         x1 = self.up(x1)
         x = torch.cat([x2, x1], dim=1)
@@ -161,7 +172,7 @@ class OutConv(nn.Module):
 
     def forward(self, x):
         return self.conv(x)
-    
+
 
 if __name__ == "__main__":
     model = Model()

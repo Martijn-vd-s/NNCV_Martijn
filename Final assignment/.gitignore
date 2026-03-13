@@ -1,3 +1,6 @@
 data/
 *.sif
 *.out
+*.pt
+*.pth
+facebookresearch_dinov3_main

@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import os
 
 # https://github.com/facebookresearch/dinov3
 # dino citation:
@@ -38,11 +39,24 @@ class Model(nn.Module):
         super().__init__()
         self.in_channels = in_channels
         self.dino_fine_tune = dino_fine_tune
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        self.repo_dir = os.path.join(BASE_DIR, 'facebookresearch_dinov3_main')
 
         # import 🦖 v3
+        # self.dino = torch.hub.load(
+        #     "facebookresearch/dinov3", "dinov3_vitb16", pretrained=True
+        # )
+
         self.dino = torch.hub.load(
-            "facebookresearch/dinov3", "dinov3_vitb16", pretrained=True
+            repo_or_dir=self.repo_dir,
+            model='dinov3_vitb16',
+            source='local',
+            pretrained=False
         )
+
+        weights_path = os.path.join(BASE_DIR, 'dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth')
+        state_dict = torch.load(weights_path, map_location='cpu', weights_only=True)
+        self.dino.load_state_dict(state_dict)
         # freeze DINO for now, we only train the decode, maybe later we can compare what the influence would be if we fine tune the model
         for param in self.dino.parameters():
             param.requires_grad = self.dino_fine_tune

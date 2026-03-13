@@ -20,11 +20,23 @@ ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --no-cache-dir \
     torch torchvision --index-url https://download.pytorch.org/whl/cu126
 RUN pip install --no-cache-dir \
-    pillow
+    pillow\
+    segmentation_models_pytorch \
+    torchmetrics \
+    termcolor
+
+
+# Create the PyTorch cache directory inside the container
+RUN mkdir -p /root/.cache/torch/hub/checkpoints/
+
+
 
 WORKDIR /app
 COPY predict.py /app/predict.py
 COPY model.py /app/model.py
 COPY model.pt /app/model.pt
+
+COPY facebookresearch_dinov3_main /app/facebookresearch_dinov3_main
+COPY dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth /app/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth
 
 ENTRYPOINT ["python", "/app/predict.py"]

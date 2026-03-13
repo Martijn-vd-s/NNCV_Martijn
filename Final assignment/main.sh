@@ -8,4 +8,4 @@ python3 train.py \
     --num-workers 10 \
     --seed 42 \
     --experiment-id "DINOv3 + unet-training V3" \
-    --dino_fine_tune 1 \
+    --dino-fine-tune 1 \

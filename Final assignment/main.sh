@@ -9,4 +9,5 @@ python3 train.py \
     --seed 42 \
     --experiment-id "DINOv3 + unet-training V3" \
     --dino-fine-tune 1 \
-    --dice-weight 3 \
+    --dice-weight 1.5 \
+    --ce-weight 0.5 \

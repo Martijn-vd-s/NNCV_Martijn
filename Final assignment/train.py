@@ -229,7 +229,7 @@ def main(args):
         model.train()
 
         # define the color jitter transform outside the loop to avoid creating a new instance for each batch
-        color_jitter = v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1).to(device)
+        color_jitter = v2.ColorJitter(brightness=0.2, contrast=0.2).to(device)
 
         for i, (images, labels) in enumerate(train_dataloader):
             labels = convert_to_train_id(labels)  # Convert class IDs to train IDs
@@ -254,7 +254,7 @@ def main(args):
             crossEntropy_loss = criterion(outputs, labels)
             dice_loss = dice_criterion(outputs, labels)
 
-            # Coombine the losses
+            # Combine the losses
             loss = (args.ce_weight * crossEntropy_loss) + (args.dice_weight * dice_loss)
 
             loss.backward()
@@ -265,7 +265,7 @@ def main(args):
                     "train_loss": loss.item(),
                     "cross_entropy_loss": crossEntropy_loss.item(),
                     "dice_loss": dice_loss.item(),
-                    "learning_rate": optimizer.param_groups[0]["lr"],
+                    "learning_rate": optimizer.param_groups[1]["lr"],
                     "epoch": epoch + 1,
                 },
                 step=epoch * len(train_dataloader) + i,

@@ -27,15 +27,17 @@ class Model(nn.Module):
     to create the model, so make sure to set the default values of the constructor to the ones you want to use for your submission.
     """
 
-    def __init__(self, in_channels=3, n_classes=19):
+    def __init__(self, in_channels=3, n_classes=19, dino_fine_tune=False):
         """
         Args:
             in_channels (int): Number of input channels. Default is 3 for RGB images.
             n_classes (int): Number of output classes. Default is 19 for the Cityscapes dataset.
+            dino_fine_tune (bool): Whether to fine-tune the DINO model. Default is False.
         """
 
         super().__init__()
         self.in_channels = in_channels
+        self.dino_fine_tune = dino_fine_tune
 
         # import 🦖 v3
         self.dino = torch.hub.load(
@@ -43,7 +45,7 @@ class Model(nn.Module):
         )
         # freeze DINO for now, we only train the decode, maybe later we can compare what the influence would be if we fine tune the model
         for param in self.dino.parameters():
-            param.requires_grad = False
+            param.requires_grad = self.dino_fine_tune
 
         # projection layers to match the CNN
         self.proj1 = nn.Conv2d(768, 64, kernel_size=1)

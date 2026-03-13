@@ -7,4 +7,5 @@ python3 train.py \
     --lr 0.001 \
     --num-workers 10 \
     --seed 42 \
-    --experiment-id "DINOv3 + unet-training V2" \
+    --experiment-id "DINOv3 + unet-training V2.1" \
+    --dino_fine_tune 1 \

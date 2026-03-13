@@ -66,7 +66,6 @@ def convert_train_id_to_color(prediction: torch.Tensor) -> torch.Tensor:
 
 
 def get_args_parser():
-
     parser = ArgumentParser("Training script for a PyTorch U-Net model")
     parser.add_argument(
         "--data-dir",
@@ -92,6 +91,12 @@ def get_args_parser():
         type=str,
         default="unet-training",
         help="Experiment ID for Weights & Biases",
+    )
+    parser.add_argument(
+        "--dino-fine-tune",
+        type=bool,
+        default=False,
+        help="Whether to fine-tune the DINO model",
     )
 
     return parser
@@ -173,6 +178,7 @@ def main(args):
     model = Model(
         in_channels=3,  # RGB images
         n_classes=19,  # 19 classes in the Cityscapes dataset
+        dino_fine_tune=args.dino_fine_tune,  # Whether to fine-tune the DINO model
     ).to(device)
 
     # Define the loss function
@@ -186,8 +192,26 @@ def main(args):
         num_classes=19, average="macro", ignore_index=255
     ).to(device)
 
+    # seperate dino parameters and unet parameters for training, this way we can tune the dino model with a lower learing rate and keep the unet with a higher learning rate
+    dino_params = [param for name, param in model.named_parameters() if "dino" in name]
+    unet_params = [
+        param for name, param in model.named_parameters() if "dino" not in name
+    ]
+
     # Define the optimizer -- add weight dacay for regularization
-    optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
+    optimizer = AdamW(
+        [
+            {
+                "params": dino_params,
+                "lr": args.lr * 0.01,
+            },  # tiny learning rate for dino
+            {
+                "params": unet_params,
+                "lr": args.lr,
+            },  # normal learning rate for everything else
+        ],
+        weight_decay=1e-4,
+    )
     # Learning rate scheduler -- maybe later we can compare with other schedulers like ReduceLROnPlateau or OneCycleLR
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
 

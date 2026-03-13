@@ -131,7 +131,7 @@ def main(args):
     img_transform = Compose(
         [
             ToImage(),
-            Resize((512, 1024)), # increase the resolution to 512x1024, since the DINO model is pretrained on higher resolution images, this should help with the performance of the model
+            Resize((256, 256)), # increase the resolution to 512x1024, since the DINO model is pretrained on higher resolution images, this should help with the performance of the model
             ToDtype(torch.float32, scale=True),
             Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)), # normalization values from ImageNet, since the DINO model is pretrained on ImageNet
         ]
@@ -141,7 +141,7 @@ def main(args):
     target_transform = Compose(
         [
             ToImage(),
-            Resize((512, 1024), interpolation=InterpolationMode.NEAREST),
+            Resize((256, 256), interpolation=InterpolationMode.NEAREST),
             ToDtype(torch.int64),  # no scaling
         ]
     )

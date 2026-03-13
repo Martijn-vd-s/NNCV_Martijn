@@ -2,10 +2,10 @@ wandb login
 
 python3 train.py \
     --data-dir ./data/cityscapes \
-    --batch-size 64 \
+    --batch-size 16 \
     --epochs 100 \
     --lr 0.001 \
     --num-workers 10 \
     --seed 42 \
-    --experiment-id "DINOv3 + unet-training V2.1" \
+    --experiment-id "DINOv3 + unet-training V3" \
     --dino_fine_tune 1 \

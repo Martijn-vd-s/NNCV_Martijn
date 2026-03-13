@@ -14,9 +14,11 @@ Feel free to customize the script as needed for your use case.
 """
 # https://huggingface.co/docs/transformers/en/model_doc/dinov3 inspiration
 
+from html import parser
 import os
 from argparse import ArgumentParser
 
+from torchvision.transforms import v2
 import wandb
 import torch
 import torch.nn as nn
@@ -98,6 +100,8 @@ def get_args_parser():
         default=False,
         help="Whether to fine-tune the DINO model",
     )
+    parser.add_argument("--ce-weight", type=float, default=1.0, help="Weight for Cross Entropy Loss")
+    parser.add_argument("--dice-weight", type=float, default=1.0, help="Weight for Dice Loss")
 
     return parser
 
@@ -223,11 +227,25 @@ def main(args):
 
         # Training
         model.train()
+
+        # define the color jitter transform outside the loop to avoid creating a new instance for each batch
+        color_jitter = v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1).to(device)
+
         for i, (images, labels) in enumerate(train_dataloader):
             labels = convert_to_train_id(labels)  # Convert class IDs to train IDs
             images, labels = images.to(device), labels.to(device)
-
             labels = labels.long().squeeze(1)  # Remove channel dimension
+
+            ### Data Augmentation
+            # Random Horizontal Flip, only 50% of the time
+            if torch.rand(1) < 0.5:
+                images = torch.flip(images, dims=[3]) # Flip width dimension of image
+                labels = torch.flip(labels, dims=[2]) # Flip width dimension of label (no channel dim)
+            
+            # Random Color Jitter, only 50% of the time
+            if torch.rand(1) < 0.5:
+                images = color_jitter(images)
+            ### End of Data Augmentation
 
             optimizer.zero_grad()
             outputs = model(images)
@@ -237,7 +255,7 @@ def main(args):
             dice_loss = dice_criterion(outputs, labels)
 
             # Coombine the losses
-            loss = crossEntropy_loss + dice_loss
+            loss = (args.ce_weight * crossEntropy_loss) + (args.dice_weight * dice_loss)
 
             loss.backward()
             optimizer.step()
@@ -245,6 +263,8 @@ def main(args):
             wandb.log(
                 {
                     "train_loss": loss.item(),
+                    "cross_entropy_loss": crossEntropy_loss.item(),
+                    "dice_loss": dice_loss.item(),
                     "learning_rate": optimizer.param_groups[0]["lr"],
                     "epoch": epoch + 1,
                 },
@@ -255,6 +275,8 @@ def main(args):
         model.eval()
         with torch.no_grad():
             losses = []
+            crossEntropy_losses = []
+            dice_losses = []
 
             # Reset the dice metric at the start of validation
             dice_metric.reset()
@@ -271,8 +293,10 @@ def main(args):
                 dice_loss = dice_criterion(outputs, labels)
 
                 # Coombine the losses
-                loss = crossEntropy_loss + dice_loss
+                loss = (args.ce_weight * crossEntropy_loss) + (args.dice_weight * dice_loss)
 
+                crossEntropy_losses.append(crossEntropy_loss.item())
+                dice_losses.append(dice_loss.item())
                 losses.append(loss.item())
 
                 # Update the dice metric with the current batch's predictions and labels
@@ -308,6 +332,8 @@ def main(args):
             wandb.log(
                 {
                     "valid_loss": valid_loss,
+                    "valid_cross_entropy_loss": sum(crossEntropy_losses) / len(crossEntropy_losses),
+                    "valid_dice_loss": sum(dice_losses) / len(dice_losses),
                     "valid_dice_score": mean_dice_score,
                 },
                 step=(epoch + 1) * len(train_dataloader) - 1,

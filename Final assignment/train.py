@@ -100,8 +100,9 @@ def get_args_parser():
         default=False,
         help="Whether to fine-tune the DINO model",
     )
-    parser.add_argument("--ce-weight", type=float, default=1.0, help="Weight for Cross Entropy Loss")
-    parser.add_argument("--dice-weight", type=float, default=1.0, help="Weight for Dice Loss")
+    parser.add_argument("--ce-weight", type=float, default=2.0, help="Weight for Cross Entropy Loss")
+    parser.add_argument("--dice-weight", type=float, default=0.5, help="Weight for Dice Loss")
+    parser.add_argument("--focal-weight", type=float, default=2.0, help="Weight for Focal Loss")
 
     return parser
 
@@ -190,11 +191,14 @@ def main(args):
     dice_criterion = smp.losses.DiceLoss(
         mode="multiclass", classes=19, ignore_index=255
     )  # Dice loss for multi-class segmentation
+    focal_criterion = smp.losses.FocalLoss(mode="multiclass", ignore_index=255)
 
     # Dice metric for evaluation (not used in training, but can be logged during validation)
     dice_metric = MulticlassF1Score(
         num_classes=19, average="macro", ignore_index=255
     ).to(device)
+
+    
 
     # seperate dino parameters and unet parameters for training, this way we can tune the dino model with a lower learing rate and keep the unet with a higher learning rate
     dino_params = [param for name, param in model.named_parameters() if "dino" in name]
@@ -253,9 +257,10 @@ def main(args):
             # Compute the combined loss (cross-entropy + dice loss)
             crossEntropy_loss = criterion(outputs, labels)
             dice_loss = dice_criterion(outputs, labels)
+            focal_loss = focal_criterion(outputs, labels)
 
             # Combine the losses
-            loss = (args.ce_weight * crossEntropy_loss) + (args.dice_weight * dice_loss)
+            loss = (args.ce_weight * crossEntropy_loss) + (args.dice_weight * dice_loss) + (args.focal_weight * focal_loss)
 
             loss.backward()
             optimizer.step()
@@ -265,6 +270,7 @@ def main(args):
                     "train_loss": loss.item(),
                     "cross_entropy_loss": crossEntropy_loss.item(),
                     "dice_loss": dice_loss.item(),
+                    "focal_loss": focal_loss.item(),
                     "learning_rate": optimizer.param_groups[1]["lr"],
                     "epoch": epoch + 1,
                 },
@@ -277,6 +283,7 @@ def main(args):
             losses = []
             crossEntropy_losses = []
             dice_losses = []
+            focal_losses = []
 
             # Reset the dice metric at the start of validation
             dice_metric.reset()
@@ -291,12 +298,14 @@ def main(args):
                 # Compute the combined loss (cross-entropy + dice loss)
                 crossEntropy_loss = criterion(outputs, labels)
                 dice_loss = dice_criterion(outputs, labels)
+                focal_loss = focal_criterion(outputs, labels)
 
                 # Coombine the losses
                 loss = (args.ce_weight * crossEntropy_loss) + (args.dice_weight * dice_loss)
 
                 crossEntropy_losses.append(crossEntropy_loss.item())
                 dice_losses.append(dice_loss.item())
+                focal_losses.append(focal_loss.item())
                 losses.append(loss.item())
 
                 # Update the dice metric with the current batch's predictions and labels
@@ -334,6 +343,7 @@ def main(args):
                     "valid_loss": valid_loss,
                     "valid_cross_entropy_loss": sum(crossEntropy_losses) / len(crossEntropy_losses),
                     "valid_dice_loss": sum(dice_losses) / len(dice_losses),
+                    "valid_focal_loss": sum(focal_losses) / len(focal_losses),
                     "valid_dice_score": mean_dice_score,
                 },
                 step=(epoch + 1) * len(train_dataloader) - 1,

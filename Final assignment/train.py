@@ -272,9 +272,9 @@ def main(args):
             wandb.log(
                 {
                     "train_loss": loss.item(),
-                    "cross_entropy_loss": crossEntropy_loss.item(),
-                    "dice_loss": dice_loss.item(),
-                    "focal_loss": focal_loss.item(),
+                    "cross_entropy_loss": args.ce_weight * crossEntropy_loss.item(),
+                    "dice_loss": args.dice_weight * dice_loss.item(),
+                    "focal_loss": args.focal_weight * focal_loss.item(),
                     "learning_rate": optimizer.param_groups[1]["lr"],
                     "epoch": epoch + 1,
                 },
@@ -345,9 +345,9 @@ def main(args):
             wandb.log(
                 {
                     "valid_loss": valid_loss,
-                    "valid_cross_entropy_loss": sum(crossEntropy_losses) / len(crossEntropy_losses),
-                    "valid_dice_loss": sum(dice_losses) / len(dice_losses),
-                    "valid_focal_loss": sum(focal_losses) / len(focal_losses),
+                    "valid_cross_entropy_loss": args.ce_weight * sum(crossEntropy_losses) / len(crossEntropy_losses),
+                    "valid_dice_loss": args.dice_weight * sum(dice_losses) / len(dice_losses),
+                    "valid_focal_loss": args.focal_weight * sum(focal_losses) / len(focal_losses),
                     "valid_dice_score": mean_dice_score,
                 },
                 step=(epoch + 1) * len(train_dataloader) - 1,

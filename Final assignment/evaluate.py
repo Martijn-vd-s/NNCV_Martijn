@@ -67,8 +67,12 @@ def main():
     with torch.no_grad():
         for images, labels in val_loader:
             images = images.to(device)
-            labels = labels.to(device)
+            
+            # 1. Map the IDs to Train IDs while it is STILL ON THE CPU
             labels = labels.apply_(lambda x: id_to_trainid.get(x, 255)).long().squeeze(1)
+            
+            # 2. NOW move it to the GPU
+            labels = labels.to(device)
 
             outputs = model(images)
             predictions = outputs.argmax(dim=1)

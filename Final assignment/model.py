@@ -64,6 +64,9 @@ class Model(nn.Module):
         # projection layers to match the CNN
         self.proj5 = nn.Conv2d(768, 512, kernel_size=1)
 
+        # ASPP module for multi-scale context in the bottleneck
+        self.aspp = ASPP(512, 512)
+
         # Encoding path
         self.inc = DoubleConv(in_channels, 64)
         self.down1 = Down(64, 128)
@@ -97,6 +100,8 @@ class Model(nn.Module):
         x3 = self.down2(x2)
         x4 = self.down3(x3)
         x5 = self.down4(x4) # x5 is now 16x16
+
+        x5 = self.aspp(x5)
 
         # DINOv3 for feature extraction
         dino_features = self.dino.forward_features(x)["x_norm_patchtokens"]
@@ -151,18 +156,22 @@ class Down(nn.Module):
 
 
 class Up(nn.Module):
-    """Upscaling then double conv"""
-
+    """Upscaling then double conv, followed by Attention!"""
     def __init__(self, in_channels, out_channels, bilinear=True):
         super().__init__()
         self.up = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)
         self.conv = DoubleConv(in_channels, out_channels, in_channels // 2)
+        
+        # Squeeze-and-Excitation Attention Block
+        self.se = SEBlock(out_channels)
 
     def forward(self, x1, x2):
         x1 = self.up(x1)
         x = torch.cat([x2, x1], dim=1)
-        return self.conv(x)
-
+        x = self.conv(x)
+        
+        # Apply attention before passing to the next layer!
+        return self.se(x)
 
 class OutConv(nn.Module):
     def __init__(self, in_channels, out_channels):
@@ -172,6 +181,61 @@ class OutConv(nn.Module):
     def forward(self, x):
         return self.conv(x)
 
+
+##### inspo from https://arxiv.org/pdf/2504.05184
+class SEBlock(nn.Module):
+    """Squeeze-and-Excitation Block for channel-wise attention"""
+    def __init__(self, in_channels, reduction=16):
+        super().__init__()
+        self.squeeze = nn.AdaptiveAvgPool2d(1)
+        self.excitation = nn.Sequential(
+            nn.Linear(in_channels, in_channels // reduction, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Linear(in_channels // reduction, in_channels, bias=False),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        b, c, _, _ = x.size()
+        # Squeeze
+        y = self.squeeze(x).view(b, c)
+        # Excite
+        y = self.excitation(y).view(b, c, 1, 1)
+        # Scale the input
+        return x * y.expand_as(x)
+
+class ASPP(nn.Module):
+    """Atrous Spatial Pyramid Pooling for multi-scale context"""
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        # 1x1 conv, and 3x3 dilated convs
+        self.conv1 = nn.Conv2d(in_channels, out_channels, 1, bias=False)
+        self.conv2 = nn.Conv2d(in_channels, out_channels, 3, padding=2, dilation=2, bias=False)
+        self.conv3 = nn.Conv2d(in_channels, out_channels, 3, padding=4, dilation=4, bias=False)
+        self.conv4 = nn.Conv2d(in_channels, out_channels, 3, padding=8, dilation=8, bias=False)
+        
+        # Global Average Pooling branch
+        self.pool = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Conv2d(in_channels, out_channels, 1, bias=False)
+        )
+        
+        # Project all 5 branches down to out_channels
+        self.project = nn.Sequential(
+            nn.Conv2d(out_channels * 5, out_channels, 1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True)
+        )
+
+    def forward(self, x):
+        res1 = self.conv1(x)
+        res2 = self.conv2(x)
+        res3 = self.conv3(x)
+        res4 = self.conv4(x)
+        res5 = F.interpolate(self.pool(x), size=x.shape[2:], mode='bilinear', align_corners=False)
+        
+        res = torch.cat([res1, res2, res3, res4, res5], dim=1)
+        return self.project(res)
 
 if __name__ == "__main__":
     model = Model()

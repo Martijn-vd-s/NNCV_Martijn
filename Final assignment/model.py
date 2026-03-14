@@ -62,19 +62,14 @@ class Model(nn.Module):
             param.requires_grad = self.dino_fine_tune
 
         # projection layers to match the CNN
-        self.proj1 = nn.Conv2d(768, 64, kernel_size=1)
-        self.proj2 = nn.Conv2d(768, 128, kernel_size=1)
-        self.proj3 = nn.Conv2d(768, 256, kernel_size=1)
-        self.proj4 = nn.Conv2d(768, 512, kernel_size=1)
         self.proj5 = nn.Conv2d(768, 512, kernel_size=1)
 
         # Encoding path
-        # self.in_channels = in_channels
-        # self.inc = DoubleConv(in_channels, 64)
-        # self.down1 = Down(64, 128)
-        # self.down2 = Down(128, 256)
-        # self.down3 = Down(256, 512)
-        # self.down4 = Down(512, 512)
+        self.inc = DoubleConv(in_channels, 64)
+        self.down1 = Down(64, 128)
+        self.down2 = Down(128, 256)
+        self.down3 = Down(256, 512)
+        self.down4 = Down(512, 512)
 
         # Decoding path
         self.up1 = Up(1024, 256)
@@ -95,45 +90,22 @@ class Model(nn.Module):
             raise ValueError(
                 f"Expected {self.in_channels} input channels, but got {x.shape[1]}"
             )
+        
+        #CNN Encoder Path
+        x1 = self.inc(x)
+        x2 = self.down1(x1)
+        x3 = self.down2(x2)
+        x4 = self.down3(x3)
+        x5 = self.down4(x4) # x5 is now 16x16
 
-        # Encoding path
-        # x1 = self.inc(x)
-        # x2 = self.down1(x1)
-        # x3 = self.down2(x2)
-        # x4 = self.down3(x3)
-        # x5 = self.down4(x4)
-
-        # DINOv3 features
+        # DINOv3 for feature extraction
         dino_features = self.dino.forward_features(x)["x_norm_patchtokens"]
         x_dino = dino_features.permute(0, 2, 1).reshape(
             x.shape[0], 768, x.shape[2] // 16, x.shape[3] // 16
-        )  # Reshape to (B, C, H/16, W/16)
+        )  # x_dino is exactly 16x16!
 
-        # # fusion of DINOv3 features and CNN features
-        # x1 = x1 + F.interpolate(
-        #     self.proj1(x_dino), size=x1.shape[2:], mode="bilinear", align_corners=False
-        # )
-        # x2 = x2 + F.interpolate(
-        #     self.proj2(x_dino), size=x2.shape[2:], mode="bilinear", align_corners=False
-        # )
-        # x3 = x3 + F.interpolate(
-        #     self.proj3(x_dino), size=x3.shape[2:], mode="bilinear", align_corners=False
-        # )
-        # x4 = x4 + F.interpolate(
-        #     self.proj4(x_dino), size=x4.shape[2:], mode="bilinear", align_corners=False
-        # )
-        # x5 = self.proj5(x_dino)  # just use the DINO features for the bottleneck
-
-        d1 = self.proj1(x_dino)
-        d2 = self.proj2(x_dino)
-        d3 = self.proj3(x_dino)
-        d4 = self.proj4(x_dino)
-        x5 = self.proj5(x_dino)
-
-        x4 = F.interpolate(d4, scale_factor=2, mode="bilinear", align_corners=False)
-        x3 = F.interpolate(d3, scale_factor=4, mode="bilinear", align_corners=False)
-        x2 = F.interpolate(d2, scale_factor=8, mode="bilinear", align_corners=False)
-        x1 = F.interpolate(d1, scale_factor=16, mode="bilinear", align_corners=False)
+        # Dino only in bottleneck
+        x5 = x5 + self.proj5(x_dino)
 
         # Decoding path
         x = self.up1(x5, x4)

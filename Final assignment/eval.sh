@@ -3,7 +3,7 @@
 #SBATCH --ntasks=1
 #SBATCH --gpus=1
 #SBATCH --partition=gpu_mig
-#SBATCH --time=00:30:00
+#SBATCH --time=00:05:00
 #SBATCH --job-name=Eval-DINOv3 
 #SBATCH --output=logs/%x_%j_.out
 #SBATCH --error=logs/%x_%j_.err    

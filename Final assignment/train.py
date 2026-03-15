@@ -18,6 +18,7 @@ from html import parser
 import os
 from argparse import ArgumentParser
 
+from cv2 import blur
 from torchvision.transforms import v2
 import wandb
 import torch
@@ -233,7 +234,8 @@ def main(args):
         model.train()
 
         # define the color jitter transform outside the loop to avoid creating a new instance for each batch
-        color_jitter = v2.ColorJitter(brightness=0.2, contrast=0.2).to(device)
+        color_jitter = v2.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1).to(device)
+        blur = v2.GaussianBlur(kernel_size=5, sigma=(0.1, 2.0)).to(device)
 
         for i, (images, labels) in enumerate(train_dataloader):
             labels = convert_to_train_id(labels)  # Convert class IDs to train IDs
@@ -249,6 +251,9 @@ def main(args):
             # Random Color Jitter, only 50% of the time
             if torch.rand(1) < 0.5:
                 images = color_jitter(images)
+
+            if torch.rand(1) < 0.3:
+                images = blur(images)
             ### End of Data Augmentation
 
             optimizer.zero_grad()

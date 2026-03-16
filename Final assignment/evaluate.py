@@ -74,7 +74,17 @@ def main():
             # 2. NOW move it to the GPU
             labels = labels.to(device)
 
-            outputs = model(images)
+            # get predictions from normal images
+            outputs_normal = model(images)
+            # get predictions from flipped images
+            images_flipped = torch.flip(images, dims=[3])
+            outputs_flipped = model(images_flipped)
+            outputs_flipped = torch.flip(outputs_flipped, dims=[3])
+
+            # Average the outputs from normal and flipped images
+            outputs = (outputs_normal + outputs_flipped) / 2.0
+
+            # Get predicted class for each pixel
             predictions = outputs.argmax(dim=1)
             
             # Accumulate confusion matrix

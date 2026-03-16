@@ -41,7 +41,7 @@ def preprocess(img: Image.Image) -> torch.Tensor:
     transform = Compose(
         [
             ToImage(),
-            Resize((256, 256)),
+            Resize((256, 512)),
             ToDtype(torch.float32, scale=True),
             Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)), # normalization values from ImageNet, since the DINO model is pretrained on ImageNet
         ]

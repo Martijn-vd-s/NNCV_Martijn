@@ -77,12 +77,13 @@ def main():
             # get predictions from normal images
             outputs_normal = model(images)
             # get predictions from flipped images
-            images_flipped = torch.flip(images, dims=[3])
-            outputs_flipped = model(images_flipped)
-            outputs_flipped = torch.flip(outputs_flipped, dims=[3])
+            # images_flipped = torch.flip(images, dims=[3])
+            # outputs_flipped = model(images_flipped)
+            # outputs_flipped = torch.flip(outputs_flipped, dims=[3])
 
             # Average the outputs from normal and flipped images
-            outputs = (outputs_normal + outputs_flipped) / 2.0
+            # outputs = (outputs_normal + outputs_flipped) / 2.0
+            outputs = outputs_normal
 
             # Get predicted class for each pixel
             predictions = outputs.argmax(dim=1)

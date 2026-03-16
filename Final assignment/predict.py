@@ -43,10 +43,11 @@ def preprocess(img: Image.Image) -> torch.Tensor:
             ToImage(),
             Resize((256, 512)),
             ToDtype(torch.float32, scale=True),
-            Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)), # normalization values from ImageNet, since the DINO model is pretrained on ImageNet
+            Normalize(
+                mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)
+            ),  # normalization values from ImageNet, since the DINO model is pretrained on ImageNet
         ]
     )
-
 
     img = transform(img)
     img = img.unsqueeze(0)  # Add batch dimension
@@ -54,8 +55,9 @@ def preprocess(img: Image.Image) -> torch.Tensor:
 
 
 def postprocess(pred: torch.Tensor, original_shape: tuple) -> np.ndarray:
-
-    pred_resized = Resize(size=original_shape, interpolation=InterpolationMode.BILINEAR)(pred)
+    pred_resized = Resize(
+        size=original_shape, interpolation=InterpolationMode.BILINEAR
+    )(pred)
 
     pred_soft = nn.Softmax(dim=1)(pred_resized)
     pred_max = torch.argmax(pred_soft, dim=1, keepdim=True)

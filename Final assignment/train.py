@@ -101,9 +101,15 @@ def get_args_parser():
         default=False,
         help="Whether to fine-tune the DINO model",
     )
-    parser.add_argument("--ce-weight", type=float, default=2.0, help="Weight for Cross Entropy Loss")
-    parser.add_argument("--dice-weight", type=float, default=0.5, help="Weight for Dice Loss")
-    parser.add_argument("--focal-weight", type=float, default=2.0, help="Weight for Focal Loss")
+    parser.add_argument(
+        "--ce-weight", type=float, default=2.0, help="Weight for Cross Entropy Loss"
+    )
+    parser.add_argument(
+        "--dice-weight", type=float, default=0.5, help="Weight for Dice Loss"
+    )
+    parser.add_argument(
+        "--focal-weight", type=float, default=2.0, help="Weight for Focal Loss"
+    )
 
     return parser
 
@@ -133,9 +139,13 @@ def main(args):
     img_transform = Compose(
         [
             ToImage(),
-            Resize((256, 512)), # increase the resolution to 512x1024, since the DINO model is pretrained on higher resolution images, this should help with the performance of the model
+            Resize(
+                (256, 512)
+            ),  # increase the resolution to 512x1024, since the DINO model is pretrained on higher resolution images, this should help with the performance of the model
             ToDtype(torch.float32, scale=True),
-            Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)), # normalization values from ImageNet, since the DINO model is pretrained on ImageNet
+            Normalize(
+                mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)
+            ),  # normalization values from ImageNet, since the DINO model is pretrained on ImageNet
         ]
     )
 
@@ -199,8 +209,6 @@ def main(args):
         num_classes=19, average="macro", ignore_index=255
     ).to(device)
 
-    
-
     # seperate dino parameters and unet parameters for training, this way we can tune the dino model with a lower learing rate and keep the unet with a higher learning rate
     dino_params = [param for name, param in model.named_parameters() if "dino" in name]
     unet_params = [
@@ -234,7 +242,9 @@ def main(args):
         model.train()
 
         # define the color jitter transform outside the loop to avoid creating a new instance for each batch
-        color_jitter = v2.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1).to(device)
+        color_jitter = v2.ColorJitter(
+            brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1
+        ).to(device)
         blur = v2.GaussianBlur(kernel_size=5, sigma=(0.1, 2.0)).to(device)
 
         for i, (images, labels) in enumerate(train_dataloader):
@@ -245,9 +255,11 @@ def main(args):
             ### Data Augmentation
             # Random Horizontal Flip, only 50% of the time
             if torch.rand(1) < 0.5:
-                images = torch.flip(images, dims=[3]) # Flip width dimension of image
-                labels = torch.flip(labels, dims=[2]) # Flip width dimension of label (no channel dim)
-            
+                images = torch.flip(images, dims=[3])  # Flip width dimension of image
+                labels = torch.flip(
+                    labels, dims=[2]
+                )  # Flip width dimension of label (no channel dim)
+
             # Random Color Jitter, only 50% of the time
             if torch.rand(1) < 0.5:
                 images = color_jitter(images)
@@ -265,7 +277,11 @@ def main(args):
             focal_loss = focal_criterion(outputs, labels)
 
             # Combine the losses
-            loss = (args.ce_weight * crossEntropy_loss) + (args.dice_weight * dice_loss) + (args.focal_weight * focal_loss)
+            loss = (
+                (args.ce_weight * crossEntropy_loss)
+                + (args.dice_weight * dice_loss)
+                + (args.focal_weight * focal_loss)
+            )
 
             loss.backward()
 
@@ -310,7 +326,9 @@ def main(args):
                 focal_loss = focal_criterion(outputs, labels)
 
                 # Coombine the losses
-                loss = (args.ce_weight * crossEntropy_loss) + (args.dice_weight * dice_loss)
+                loss = (args.ce_weight * crossEntropy_loss) + (
+                    args.dice_weight * dice_loss
+                )
 
                 crossEntropy_losses.append(crossEntropy_loss.item())
                 dice_losses.append(dice_loss.item())
@@ -350,9 +368,15 @@ def main(args):
             wandb.log(
                 {
                     "valid_loss": valid_loss,
-                    "valid_cross_entropy_loss": args.ce_weight * sum(crossEntropy_losses) / len(crossEntropy_losses),
-                    "valid_dice_loss": args.dice_weight * sum(dice_losses) / len(dice_losses),
-                    "valid_focal_loss": args.focal_weight * sum(focal_losses) / len(focal_losses),
+                    "valid_cross_entropy_loss": args.ce_weight
+                    * sum(crossEntropy_losses)
+                    / len(crossEntropy_losses),
+                    "valid_dice_loss": args.dice_weight
+                    * sum(dice_losses)
+                    / len(dice_losses),
+                    "valid_focal_loss": args.focal_weight
+                    * sum(focal_losses)
+                    / len(focal_losses),
                     "valid_dice_score": mean_dice_score,
                 },
                 step=(epoch + 1) * len(train_dataloader) - 1,

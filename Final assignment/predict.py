@@ -96,8 +96,16 @@ def main():
             img_tensor = preprocess(img).to(device)
 
             # Forward pass
-            pred = model(img_tensor)
+            # pred = model(img_tensor)
+            # get predictions from normal images
+            outputs_normal = model(img_tensor)
+            # get predictions from flipped images
+            images_flipped = torch.flip(img_tensor, dims=[3])
+            outputs_flipped = model(images_flipped)
+            outputs_flipped = torch.flip(outputs_flipped, dims=[3])
 
+            # Average the outputs from normal and flipped images
+            pred = (outputs_normal + outputs_flipped) / 2.0
             # Postprocess to segmentation mask
             seg_pred = postprocess(pred, original_shape)
 

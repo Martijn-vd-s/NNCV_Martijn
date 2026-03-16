@@ -53,7 +53,7 @@ def main():
     model = Model(in_channels=3, n_classes=19, dino_fine_tune=False).to(device)
     
     # to checkpoint path !!!!
-    checkpoint_path = "checkpoints/DINOv3 + unet-training V4/best_model-epoch=0076-val_loss=0.2837434709072113.pt" 
+    checkpoint_path = "checkpoints/DINOv3 + unet-training V4/best_model-epoch=0061-val_loss=0.22639150079339743.pt" 
     model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
     model.eval()
 

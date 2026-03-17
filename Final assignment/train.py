@@ -247,7 +247,7 @@ def main(args):
         ).to(device)
 
         blur = v2.GaussianBlur(kernel_size=5, sigma=(0.1, 2.0)).to(device)
-        random_crop = v2.RandomCrop(size=(512, 512)).to(device)
+        random_crop = v2.RandomCrop(size=(512, 1024)).to(device)
 
 
         for i, (images, labels) in enumerate(train_dataloader):

@@ -18,7 +18,7 @@ from html import parser
 import os
 from argparse import ArgumentParser
 
-from cv2 import blur
+# from cv2 import blur
 from torchvision.transforms import v2
 import wandb
 import torch
@@ -139,9 +139,9 @@ def main(args):
     img_transform = Compose(
         [
             ToImage(),
-            Resize(
-                (256, 512)
-            ),  # increase the resolution to 512x1024, since the DINO model is pretrained on higher resolution images, this should help with the performance of the model
+            # Resize(
+            #     (256, 512)
+            # ),  # increase the resolution to 512x1024, since the DINO model is pretrained on higher resolution images, this should help with the performance of the model
             ToDtype(torch.float32, scale=True),
             Normalize(
                 mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)
@@ -153,7 +153,7 @@ def main(args):
     target_transform = Compose(
         [
             ToImage(),
-            Resize((256, 512), interpolation=InterpolationMode.NEAREST),
+            # Resize((256, 512), interpolation=InterpolationMode.NEAREST),
             ToDtype(torch.int64),  # no scaling
         ]
     )
@@ -185,7 +185,7 @@ def main(args):
     )
     valid_dataloader = DataLoader(
         valid_dataset,
-        batch_size=args.batch_size,
+        batch_size=2, # use smaller batch size with full sized images to avoid out of memory errors during validation
         shuffle=False,
         num_workers=args.num_workers,
     )
@@ -245,11 +245,18 @@ def main(args):
         color_jitter = v2.ColorJitter(
             brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1
         ).to(device)
+
         blur = v2.GaussianBlur(kernel_size=5, sigma=(0.1, 2.0)).to(device)
+        random_crop = v2.RandomCrop(size=(512, 512)).to(device)
+
 
         for i, (images, labels) in enumerate(train_dataloader):
             labels = convert_to_train_id(labels)  # Convert class IDs to train IDs
             images, labels = images.to(device), labels.to(device)
+
+            # randomly crop images and labels
+            images, labels = random_crop(images, labels)
+
             labels = labels.long().squeeze(1)  # Remove channel dimension
 
             ### Data Augmentation
@@ -269,19 +276,22 @@ def main(args):
             ### End of Data Augmentation
 
             optimizer.zero_grad()
-            outputs = model(images)
 
-            # Compute the combined loss (cross-entropy + dice loss)
-            crossEntropy_loss = criterion(outputs, labels)
-            dice_loss = dice_criterion(outputs, labels)
-            focal_loss = focal_criterion(outputs, labels)
+            # Use mixed precision for faster training and reduced memory usage
+            with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+                outputs = model(images)
 
-            # Combine the losses
-            loss = (
-                (args.ce_weight * crossEntropy_loss)
-                + (args.dice_weight * dice_loss)
-                + (args.focal_weight * focal_loss)
-            )
+                # Compute the combined loss (cross-entropy + dice loss)
+                crossEntropy_loss = criterion(outputs, labels)
+                dice_loss = dice_criterion(outputs, labels)
+                focal_loss = focal_criterion(outputs, labels)
+
+                # Combine the losses
+                loss = (
+                    (args.ce_weight * crossEntropy_loss)
+                    + (args.dice_weight * dice_loss)
+                    + (args.focal_weight * focal_loss)
+                )
 
             loss.backward()
 
@@ -319,16 +329,18 @@ def main(args):
 
                 labels = labels.long().squeeze(1)  # Remove channel dimension
 
-                outputs = model(images)
-                # Compute the combined loss (cross-entropy + dice loss)
-                crossEntropy_loss = criterion(outputs, labels)
-                dice_loss = dice_criterion(outputs, labels)
-                focal_loss = focal_criterion(outputs, labels)
+                # Use mixed precision for faster validating and reduced memory usage
+                with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+                    outputs = model(images)
+                    # Compute the combined loss (cross-entropy + dice loss)
+                    crossEntropy_loss = criterion(outputs, labels)
+                    dice_loss = dice_criterion(outputs, labels)
+                    focal_loss = focal_criterion(outputs, labels)
 
-                # Coombine the losses
-                loss = (args.ce_weight * crossEntropy_loss) + (
-                    args.dice_weight * dice_loss
-                )
+                    # Coombine the losses
+                    loss = (args.ce_weight * crossEntropy_loss) + (
+                        args.dice_weight * dice_loss
+                    )
 
                 crossEntropy_losses.append(crossEntropy_loss.item())
                 dice_losses.append(dice_loss.item())

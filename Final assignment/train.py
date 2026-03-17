@@ -256,8 +256,8 @@ def main(args):
 
             # randomly crop images and labels
             crop_i, crop_j, crop_h, crop_w = v2.RandomCrop.get_params(images, output_size=(512, 1024))
-            images = TF.crop(images, crop_i, crop_j, crop_h, crop_w)
-            labels = TF.crop(labels, crop_i, crop_j, crop_h, crop_w)
+            images = TF.crop(images, crop_i, crop_j, crop_h, crop_w).contiguous()
+            labels = TF.crop(labels, crop_i, crop_j, crop_h, crop_w).contiguous()
 
             labels = labels.long().squeeze(1)  # Remove channel dimension
 

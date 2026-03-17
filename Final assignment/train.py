@@ -37,7 +37,7 @@ from torchvision.transforms.v2 import (
 )
 import segmentation_models_pytorch as smp
 from torchmetrics.classification import MulticlassF1Score
-
+import torchvision.transforms.functional as TF
 from model import Model
 
 # Mapping class IDs to train IDs
@@ -255,7 +255,9 @@ def main(args):
             images, labels = images.to(device), labels.to(device)
 
             # randomly crop images and labels
-            images, labels = random_crop(images, labels)
+            crop_i, crop_j, crop_h, crop_w = v2.RandomCrop.get_params(images, output_size=(512, 1024))
+            images = TF.crop(images, crop_i, crop_j, crop_h, crop_w)
+            labels = TF.crop(labels, crop_i, crop_j, crop_h, crop_w)
 
             labels = labels.long().squeeze(1)  # Remove channel dimension
 

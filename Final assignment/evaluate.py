@@ -110,7 +110,7 @@ def main():
                 model=model, 
                 image_tensor=images, 
                 window_size=(512, 1024), 
-                stride_rate=0.5
+                stride_rate=1
             )
 
             predictions = outputs.argmax(dim=1)

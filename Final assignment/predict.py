@@ -9,6 +9,7 @@ and output requirements.
 """
 
 from pathlib import Path
+from xml.parsers.expat import model
 
 import torch
 import torch.nn as nn
@@ -41,7 +42,7 @@ def preprocess(img: Image.Image) -> torch.Tensor:
     transform = Compose(
         [
             ToImage(),
-            Resize((256, 512)),
+            # Resize((256, 512)),
             ToDtype(torch.float32, scale=True),
             Normalize(
                 mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)
@@ -55,18 +56,52 @@ def preprocess(img: Image.Image) -> torch.Tensor:
 
 
 def postprocess(pred: torch.Tensor, original_shape: tuple) -> np.ndarray:
-    pred_resized = Resize(
-        size=original_shape, interpolation=InterpolationMode.BILINEAR
-    )(pred)
-
-    pred_soft = nn.Softmax(dim=1)(pred_resized)
-    pred_max = torch.argmax(pred_soft, dim=1, keepdim=True)
+    pred_max = torch.argmax(pred, dim=1, keepdim=True)
 
     prediction_numpy = pred_max.cpu().detach().numpy()
     prediction_numpy = prediction_numpy.squeeze()
 
     return prediction_numpy
 
+def sliding_window_inference(model, image_tensor, window_size=(512, 1024), stride_rate=0.5):
+    device = image_tensor.device
+    B, _, H, W = image_tensor.shape
+    w_h, w_w = window_size
+    
+    stride_h = int(w_h * stride_rate)
+    stride_w = int(w_w * stride_rate)
+
+    num_classes = 19
+    preds = torch.zeros((B, num_classes, H, W), device=device)
+    count_map = torch.zeros((B, 1, H, W), device=device)
+
+    h_starts = list(range(0, max(H - w_h + stride_h, 1), stride_h))
+    w_starts = list(range(0, max(W - w_w + stride_w, 1), stride_w))
+
+    for y in h_starts:
+        for x in w_starts:
+            y1 = min(y, H - w_h)
+            y2 = y1 + w_h
+            x1 = min(x, W - w_w)
+            x2 = x1 + w_w
+
+            crop = image_tensor[:, :, y1:y2, x1:x2]
+
+            with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+                outputs_normal = model(crop)
+                
+                crop_flipped = torch.flip(crop, dims=[3])
+                outputs_flipped = model(crop_flipped)
+                outputs_flipped = torch.flip(outputs_flipped, dims=[3])
+
+            crop_pred = (outputs_normal.float() + outputs_flipped.float()) / 2.0
+            crop_probs = torch.nn.functional.softmax(crop_pred, dim=1)
+
+            preds[:, :, y1:y2, x1:x2] += crop_probs
+            count_map[:, :, y1:y2, x1:x2] += 1
+
+    final_preds = preds / count_map
+    return final_preds
 
 def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -98,16 +133,13 @@ def main():
             img_tensor = preprocess(img).to(device)
 
             # Forward pass
-            # pred = model(img_tensor)
-            # get predictions from normal images
-            outputs_normal = model(img_tensor)
-            # get predictions from flipped images
-            images_flipped = torch.flip(img_tensor, dims=[3])
-            outputs_flipped = model(images_flipped)
-            outputs_flipped = torch.flip(outputs_flipped, dims=[3])
+            pred = sliding_window_inference(
+                model=model, 
+                image_tensor=img_tensor, 
+                window_size=(512, 1024), 
+                stride_rate=0.5
+            )
 
-            # Average the outputs from normal and flipped images
-            pred = (outputs_normal + outputs_flipped) / 2.0
             # Postprocess to segmentation mask
             seg_pred = postprocess(pred, original_shape)
 

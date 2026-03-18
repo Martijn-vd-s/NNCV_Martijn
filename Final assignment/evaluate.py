@@ -3,157 +3,149 @@ import json
 import torch
 from torch.utils.data import DataLoader
 from torchvision.datasets import Cityscapes
-from torchvision.transforms.v2 import (
-    Compose,
-    Normalize,
-    Resize,
-    ToImage,
-    ToDtype,
-    InterpolationMode,
-)
+from torchvision.transforms.v2 import Compose, Normalize, ToImage, ToDtype
 from model import Model
 
-# Mapping the 19 Cityscapes train_ids into the 7 Server Categories
 CATEGORY_MAPPING = {
-    "Flat": [0, 1],  # road, sidewalk
-    "Construction": [2, 3, 4],  # building, wall, fence (Matched your JSON spelling!)
-    "Object": [5, 6, 7],  # pole, traffic light, traffic sign
-    "Nature": [8, 9],  # vegetation, terrain
-    "Sky": [10],  # sky
-    "Human": [11, 12],  # person, rider
-    "Vehicle": [13, 14, 15, 16, 17, 18],  # car, truck, bus, train, motorcycle, bicycle
+    "Flat": [0, 1],
+    "Construction": [2, 3, 4],
+    "Object": [5, 6, 7],
+    "Nature": [8, 9],
+    "Sky": [10],
+    "Human": [11, 12],
+    "Vehicle": [13, 14, 15, 16, 17, 18],
 }
 
-
 def fast_hist(a, b, n):
-    """Calculates the confusion matrix for a single batch."""
     k = (a >= 0) & (a < n)
     return torch.bincount(n * a[k] + b[k], minlength=n**2).reshape(n, n)
 
+def sliding_window_inference(model, image_tensor, window_size=(512, 1024), stride_rate=0.5):
+    device = image_tensor.device
+    B, _, H, W = image_tensor.shape
+    w_h, w_w = window_size
+    
+    stride_h = int(w_h * stride_rate)
+    stride_w = int(w_w * stride_rate)
+
+    num_classes = 19
+    preds = torch.zeros((B, num_classes, H, W), device=device)
+    count_map = torch.zeros((B, 1, H, W), device=device)
+
+    h_starts = list(range(0, max(H - w_h + stride_h, 1), stride_h))
+    w_starts = list(range(0, max(W - w_w + stride_w, 1), stride_w))
+
+    for y in h_starts:
+        for x in w_starts:
+            y1 = min(y, H - w_h)
+            y2 = y1 + w_h
+            x1 = min(x, W - w_w)
+            x2 = x1 + w_w
+
+            crop = image_tensor[:, :, y1:y2, x1:x2]
+
+            with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+                outputs_normal = model(crop)
+                
+                crop_flipped = torch.flip(crop, dims=[3])
+                outputs_flipped = model(crop_flipped)
+                outputs_flipped = torch.flip(outputs_flipped, dims=[3])
+
+            crop_pred = (outputs_normal.float() + outputs_flipped.float()) / 2.0
+            crop_probs = torch.nn.functional.softmax(crop_pred, dim=1)
+
+            preds[:, :, y1:y2, x1:x2] += crop_probs
+            count_map[:, :, y1:y2, x1:x2] += 1
+
+    final_preds = preds / count_map
+    return final_preds
 
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Evaluating on {device}...")
 
-    # --- 1. Load the Validation Dataset ---
-    img_transform = Compose(
-        [
-            ToImage(),
-            Resize((256, 256)),
-            ToDtype(torch.float32, scale=True),
-            Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-        ]
-    )
-    target_transform = Compose(
-        [
-            ToImage(),
-            Resize((256, 256), interpolation=InterpolationMode.NEAREST),
-            ToDtype(torch.int64),
-        ]
-    )
+    img_transform = Compose([
+        ToImage(),
+        ToDtype(torch.float32, scale=True),
+        Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+    ])
+    
+    target_transform = Compose([
+        ToImage(),
+        ToDtype(torch.int64),
+    ])
 
     val_dataset = Cityscapes(
-        root="./data/cityscapes",  # to right path!!!
+        root="./data/cityscapes",  
         split="val",
         mode="fine",
         target_type="semantic",
         transform=img_transform,
         target_transform=target_transform,
     )
-    val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False, num_workers=4)
+    
+    val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False, num_workers=4) 
 
-    # --- 2. Load the Model & Best Weights ---
     model = Model(in_channels=3, n_classes=19, dino_fine_tune=False).to(device)
-
-    # to checkpoint path !!!!
-    checkpoint_path = "checkpoints/DINOv3 + unet-training V4/best_model-epoch=0061-val_loss=0.22639150079339743.pt"
-    model.load_state_dict(
-        torch.load(checkpoint_path, map_location=device, weights_only=True)
-    )
+    
+    checkpoint_path = "checkpoints/DINOv3 + unet-training V5/best_model-epoch=0014-val_loss=0.18933865303794542.pt"
+    model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
     model.eval()
 
-    # --- 3. Run Inference and Accumulate Pixels ---
     num_classes = 19
     hist = torch.zeros((num_classes, num_classes), device=device)
-
     id_to_trainid = {cls.id: cls.train_id for cls in Cityscapes.classes}
 
     print("Running inference on validation set...")
     with torch.no_grad():
-        for images, labels in val_loader:
+        for i, (images, labels) in enumerate(val_loader):
+            print(f"Processing batch {i+1}/{len(val_loader)}...")
             images = images.to(device)
 
-            # 1. Map the IDs to Train IDs while it is STILL ON THE CPU
-            labels = (
-                labels.apply_(lambda x: id_to_trainid.get(x, 255)).long().squeeze(1)
-            )
-
-            # 2. NOW move it to the GPU
+            labels = labels.apply_(lambda x: id_to_trainid.get(x, 255)).long().squeeze(1)
             labels = labels.to(device)
 
-            # get predictions from normal images
-            outputs_normal = model(images)
-            # get predictions from flipped images
-            images_flipped = torch.flip(images, dims=[3])
-            outputs_flipped = model(images_flipped)
-            outputs_flipped = torch.flip(outputs_flipped, dims=[3])
+            outputs = sliding_window_inference(
+                model=model, 
+                image_tensor=images, 
+                window_size=(512, 1024), 
+                stride_rate=0.5
+            )
 
-            # Average the outputs from normal and flipped images
-            outputs = (outputs_normal + outputs_flipped) / 2.0
-            # outputs = outputs_normal
-
-            # Get predicted class for each pixel
             predictions = outputs.argmax(dim=1)
-
-            # Accumulate confusion matrix
             hist += fast_hist(labels.flatten(), predictions.flatten(), num_classes)
 
-    # --- 4. Calculate True Positives, False Positives, False Negatives ---
     tp = torch.diag(hist)
     fp = hist.sum(dim=0) - tp
     fn = hist.sum(dim=1) - tp
 
-    # --- 5. Group into Categories and Calculate Metrics ---
     results = {}
     total_iou = 0.0
     total_dice = 0.0
 
     for cat_name, class_ids in CATEGORY_MAPPING.items():
-        # Sum TP, FP, FN for all classes in this category
         cat_tp = tp[class_ids].sum().item()
         cat_fp = fp[class_ids].sum().item()
         cat_fn = fn[class_ids].sum().item()
 
-        # Avoid division by zero
-        iou = (
-            cat_tp / (cat_tp + cat_fp + cat_fn)
-            if (cat_tp + cat_fp + cat_fn) > 0
-            else 0.0
-        )
-        dice = (
-            (2 * cat_tp) / (2 * cat_tp + cat_fp + cat_fn)
-            if (2 * cat_tp + cat_fp + cat_fn) > 0
-            else 0.0
-        )
+        iou = cat_tp / (cat_tp + cat_fp + cat_fn) if (cat_tp + cat_fp + cat_fn) > 0 else 0.0
+        dice = (2 * cat_tp) / (2 * cat_tp + cat_fp + cat_fn) if (2 * cat_tp + cat_fp + cat_fn) > 0 else 0.0
 
-        results[f"Dice{cat_name}"] = dice
-        results[f"IoU{cat_name}"] = iou
+        results[f"Dice_{cat_name}"] = round(dice, 4)
+        results[f"IoU_{cat_name}"] = round(iou, 4)
 
         total_iou += iou
         total_dice += dice
 
-    # Calculate overall means
-    results["MeanDice"] = total_dice / len(CATEGORY_MAPPING)
-    results["MeanIoU"] = total_iou / len(CATEGORY_MAPPING)
+    results["MeanDice"] = round(total_dice / len(CATEGORY_MAPPING), 4)
+    results["MeanIoU"] = round(total_iou / len(CATEGORY_MAPPING), 4)
     results["NumSamples"] = len(val_dataset)
 
-    # --- 6. Print and Save JSON ---
     print("\n--- Final Metrics ---")
     print(json.dumps(results, indent=2))
 
     with open("final_metrics.json", "w") as f:
         json.dump(results, f, indent=2)
-
 
 if __name__ == "__main__":
     main()

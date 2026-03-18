@@ -98,7 +98,8 @@ def main():
 
     print("Running inference on validation set...")
     with torch.no_grad():
-        for i, (images, labels) in enumerate(val_loader):
+        from tqdm import tqdm
+        for i, (images, labels) in enumerate(tqdm(val_loader, desc="Evaluating")):
             print(f"Processing batch {i+1}/{len(val_loader)}...")
             images = images.to(device)
 

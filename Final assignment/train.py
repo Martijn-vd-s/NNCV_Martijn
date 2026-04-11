@@ -42,6 +42,8 @@ import torchvision.transforms.functional as TF
 from model import Model
 import torch.nn.functional as F
 from torchmetrics.classification import MulticlassJaccardIndex
+from predict import sliding_window_inference
+
 
 # Mapping class IDs to train IDs
 id_to_trainid = {cls.id: cls.train_id for cls in Cityscapes.classes}
@@ -138,6 +140,30 @@ def main(args):
     # Define the device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    class_weights = torch.tensor(
+        [
+            0.8,  # road
+            1.0,  # sidewalk
+            1.0,  # building
+            2.0,  # wall
+            2.0,  # fence
+            2.0,  # pole
+            2.5,  # traffic light
+            2.5,  # traffic sign
+            1.0,  # vegetation
+            1.5,  # terrain
+            0.8,  # sky
+            3.0,  # person
+            3.5,  # rider
+            1.0,  # car
+            2.5,  # truck
+            2.5,  # bus
+            3.0,  # train
+            3.5,  # motorcycle
+            3.0,  # bicycle
+        ]
+    ).to(device)
+
     # Define the transforms to apply to the data
     img_transform = Compose(
         [
@@ -201,7 +227,9 @@ def main(args):
     ).to(device)
 
     # Define the loss function
-    criterion = nn.CrossEntropyLoss(ignore_index=255)  # Ignore the void class
+    criterion = nn.CrossEntropyLoss(
+        weight=class_weights, ignore_index=255
+    )  # Ignore the void class
     dice_criterion = smp.losses.DiceLoss(
         mode="multiclass", classes=19, ignore_index=255
     )  # Dice loss for multi-class segmentation
@@ -263,7 +291,7 @@ def main(args):
             images, labels = images.to(device), labels.to(device)
 
             # randomly scale images and the labels
-            scale = random.uniform(0.5, 2.0)
+            scale = random.uniform(0.75, 1.5)
             new_h, new_w = int(1024 * scale), int(2048 * scale)
             images = F.interpolate(
                 images, size=(new_h, new_w), mode="bilinear", align_corners=False
@@ -288,6 +316,11 @@ def main(args):
                 labels = torch.flip(
                     labels, dims=[2]
                 )  # Flip width dimension of label (no channel dim)
+
+            if torch.rand(1) < 0.1:
+                images = TF.rgb_to_grayscale(
+                    images, num_output_channels=3
+                )  # make gray so it seems like it is dark
 
             # Random Color Jitter, only 50% of the time
             if torch.rand(1) < 0.5:
@@ -354,6 +387,12 @@ def main(args):
                 # Use mixed precision for faster validating and reduced memory usage
                 with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                     outputs = model(images)
+                    outputs = sliding_window_inference(
+                        model=model,
+                        image_tensor=images,
+                        window_size=(512, 1024),
+                        stride_rate=0.5,
+                    )
                     # Compute the combined loss (cross-entropy + dice loss)
                     crossEntropy_loss = criterion(outputs, labels)
                     dice_loss = dice_criterion(outputs, labels)

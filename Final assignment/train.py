@@ -17,6 +17,7 @@ Feel free to customize the script as needed for your use case.
 from html import parser
 import os
 from argparse import ArgumentParser
+import random
 
 # from cv2 import blur
 from torchvision.transforms import v2
@@ -39,6 +40,8 @@ import segmentation_models_pytorch as smp
 from torchmetrics.classification import MulticlassF1Score
 import torchvision.transforms.functional as TF
 from model import Model
+import torch.nn.functional as F
+from torchmetrics.classification import MulticlassJaccardIndex
 
 # Mapping class IDs to train IDs
 id_to_trainid = {cls.id: cls.train_id for cls in Cityscapes.classes}
@@ -185,7 +188,7 @@ def main(args):
     )
     valid_dataloader = DataLoader(
         valid_dataset,
-        batch_size=2, # use smaller batch size with full sized images to avoid out of memory errors during validation
+        batch_size=2,  # use smaller batch size with full sized images to avoid out of memory errors during validation
         shuffle=False,
         num_workers=args.num_workers,
     )
@@ -209,6 +212,12 @@ def main(args):
         num_classes=19, average="macro", ignore_index=255
     ).to(device)
 
+    server_metric = MulticlassF1Score(
+        num_classes=19,
+        average=None,  # returns a score per class, not averaged
+        ignore_index=255,
+    ).to(device)
+
     # seperate dino parameters and unet parameters for training, this way we can tune the dino model with a lower learing rate and keep the unet with a higher learning rate
     dino_params = [param for name, param in model.named_parameters() if "dino" in name]
     unet_params = [
@@ -220,7 +229,7 @@ def main(args):
         [
             {
                 "params": dino_params,
-                "lr": args.lr * 0.01,
+                "lr": args.lr * 0.005,
             },  # tiny learning rate for dino
             {
                 "params": unet_params,
@@ -249,13 +258,24 @@ def main(args):
         blur = v2.GaussianBlur(kernel_size=5, sigma=(0.1, 2.0)).to(device)
         random_crop = v2.RandomCrop(size=(512, 1024)).to(device)
 
-
         for i, (images, labels) in enumerate(train_dataloader):
             labels = convert_to_train_id(labels)  # Convert class IDs to train IDs
             images, labels = images.to(device), labels.to(device)
 
+            # randomly scale images and the labels
+            scale = random.uniform(0.5, 2.0)
+            new_h, new_w = int(1024 * scale), int(2048 * scale)
+            images = F.interpolate(
+                images, size=(new_h, new_w), mode="bilinear", align_corners=False
+            )
+            labels = F.interpolate(
+                labels.float(), size=(new_h, new_w), mode="nearest"
+            ).long()
+
             # randomly crop images and labels
-            crop_i, crop_j, crop_h, crop_w = v2.RandomCrop.get_params(images, output_size=(512, 1024))
+            crop_i, crop_j, crop_h, crop_w = v2.RandomCrop.get_params(
+                images, output_size=(512, 1024)
+            )
             images = TF.crop(images, crop_i, crop_j, crop_h, crop_w).contiguous()
             labels = TF.crop(labels, crop_i, crop_j, crop_h, crop_w).contiguous()
 
@@ -280,7 +300,7 @@ def main(args):
             optimizer.zero_grad()
 
             # Use mixed precision for faster training and reduced memory usage
-            with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+            with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                 outputs = model(images)
 
                 # Compute the combined loss (cross-entropy + dice loss)
@@ -332,7 +352,7 @@ def main(args):
                 labels = labels.long().squeeze(1)  # Remove channel dimension
 
                 # Use mixed precision for faster validating and reduced memory usage
-                with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+                with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                     outputs = model(images)
                     # Compute the combined loss (cross-entropy + dice loss)
                     crossEntropy_loss = criterion(outputs, labels)
@@ -352,6 +372,8 @@ def main(args):
                 # Update the dice metric with the current batch's predictions and labels
                 predictions = outputs.argmax(dim=1)
                 dice_metric.update(predictions, labels)
+
+                server_metric.update(predictions, labels)
 
                 if i == 0:
                     predictions = outputs.softmax(1).argmax(1)
@@ -379,6 +401,20 @@ def main(args):
             valid_loss = sum(losses) / len(losses)
             mean_dice_score = dice_metric.compute()
 
+            per_class = server_metric.compute()  # shape (19,)
+
+            flat = per_class[[0, 1]].mean()
+            construction = per_class[[2, 3, 4]].mean()
+            object_cat = per_class[[5, 6, 7]].mean()
+            nature = per_class[[8, 9]].mean()
+            sky = per_class[[10]].mean()
+            human = per_class[[11, 12]].mean()
+            vehicle = per_class[[13, 14, 15, 16, 17, 18]].mean()
+
+            server_mean = torch.stack(
+                [flat, construction, object_cat, nature, sky, human, vehicle]
+            ).mean()
+
             wandb.log(
                 {
                     "valid_loss": valid_loss,
@@ -392,6 +428,14 @@ def main(args):
                     * sum(focal_losses)
                     / len(focal_losses),
                     "valid_dice_score": mean_dice_score,
+                    "server/mean_dice": server_mean.item(),
+                    "server/flat_dice": flat.item(),
+                    "server/construction_dice": construction.item(),
+                    "server/object_dice": object_cat.item(),
+                    "server/nature_dice": nature.item(),
+                    "server/sky_dice": sky.item(),
+                    "server/human_dice": human.item(),
+                    "server/vehicle_dice": vehicle.item(),
                 },
                 step=(epoch + 1) * len(train_dataloader) - 1,
             )

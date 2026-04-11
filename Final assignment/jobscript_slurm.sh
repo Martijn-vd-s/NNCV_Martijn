@@ -4,8 +4,8 @@
 #SBATCH --cpus-per-task=18
 #SBATCH --gpus=1
 #SBATCH --partition=gpu_a100
-#SBATCH --time=04:00:00
-#SBATCH --job-name=dinov3-Unet-V5 
+#SBATCH --time=08:00:00
+#SBATCH --job-name=dinov3-Unet-V6 
 #SBATCH --output=logs/%x_%j_.out
 #SBATCH --error=logs/%x_%j_.err    
 

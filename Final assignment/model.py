@@ -60,8 +60,13 @@ class Model(nn.Module):
         state_dict = torch.load(weights_path, map_location="cpu", weights_only=True)
         self.dino.load_state_dict(state_dict)
         # freeze DINO for now, we only train the decode, maybe later we can compare what the influence would be if we fine tune the model
-        for param in self.dino.parameters():
-            param.requires_grad = self.dino_fine_tune
+        for name, param in self.dino.named_parameters():
+            if self.dino_fine_tune and any(
+                f"blocks.{i}." in name for i in range(8, 12)
+            ):
+                param.requires_grad = True
+            else:
+                param.requires_grad = False
 
         # projection layers to match the CNN
         self.proj1 = nn.Conv2d(768, 64, kernel_size=1)
@@ -113,31 +118,42 @@ class Model(nn.Module):
         x5 = self.aspp(x5)
 
         # DINOv3 for feature extraction
-        dino_features = self.dino.forward_features(x)["x_norm_patchtokens"]
-        x_dino = dino_features.permute(0, 2, 1).reshape(
-            x.shape[0], 768, x.shape[2] // 16, x.shape[3] // 16
-        )  # x_dino is exactly 16x16!
+        dino_feats = self.dino.get_intermediate_layers(x, n=[2, 5, 8, 11], reshape=True)
 
         # fusion of DINOv3 features and CNN features
         x1 = x1 + F.interpolate(
-            self.proj1(x_dino), size=x1.shape[2:], mode="bilinear", align_corners=False
+            self.proj1(dino_feats[0]),
+            size=x1.shape[2:],
+            mode="bilinear",
+            align_corners=False,
         )
 
         x2 = x2 + F.interpolate(
-            self.proj2(x_dino), size=x2.shape[2:], mode="bilinear", align_corners=False
+            self.proj2(dino_feats[1]),
+            size=x2.shape[2:],
+            mode="bilinear",
+            align_corners=False,
         )
 
         x3 = x3 + F.interpolate(
-            self.proj3(x_dino), size=x3.shape[2:], mode="bilinear", align_corners=False
+            self.proj3(dino_feats[2]),
+            size=x3.shape[2:],
+            mode="bilinear",
+            align_corners=False,
         )
         x3 = self.dropout(x3)
 
         x4 = x4 + F.interpolate(
-            self.proj4(x_dino), size=x4.shape[2:], mode="bilinear", align_corners=False
+            self.proj4(dino_feats[3]),
+            size=x4.shape[2:],
+            mode="bilinear",
+            align_corners=False,
         )
         x4 = self.dropout(x4)
 
-        x5 = x5 + self.proj5(x_dino)
+        x5 = x5 + self.proj5(
+            dino_feats[3]
+        )  # deepest DINO block feeds the bottleneck too
         x5 = self.dropout(x5)
 
         # Decoding path

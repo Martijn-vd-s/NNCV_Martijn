@@ -16,15 +16,19 @@ CATEGORY_MAPPING = {
     "Vehicle": [13, 14, 15, 16, 17, 18],
 }
 
+
 def fast_hist(a, b, n):
     k = (a >= 0) & (a < n)
     return torch.bincount(n * a[k] + b[k], minlength=n**2).reshape(n, n)
 
-def sliding_window_inference(model, image_tensor, window_size=(512, 1024), stride_rate=0.5):
+
+def sliding_window_inference(
+    model, image_tensor, window_size=(512, 1024), stride_rate=0.5
+):
     device = image_tensor.device
     B, _, H, W = image_tensor.shape
     w_h, w_w = window_size
-    
+
     stride_h = int(w_h * stride_rate)
     stride_w = int(w_w * stride_rate)
 
@@ -44,9 +48,9 @@ def sliding_window_inference(model, image_tensor, window_size=(512, 1024), strid
 
             crop = image_tensor[:, :, y1:y2, x1:x2]
 
-            with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+            with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                 outputs_normal = model(crop)
-                
+
                 crop_flipped = torch.flip(crop, dims=[3])
                 outputs_flipped = model(crop_flipped)
                 outputs_flipped = torch.flip(outputs_flipped, dims=[3])
@@ -60,36 +64,43 @@ def sliding_window_inference(model, image_tensor, window_size=(512, 1024), strid
     final_preds = preds / count_map
     return final_preds
 
+
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Evaluating on {device}...")
 
-    img_transform = Compose([
-        ToImage(),
-        ToDtype(torch.float32, scale=True),
-        Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-    ])
-    
-    target_transform = Compose([
-        ToImage(),
-        ToDtype(torch.int64),
-    ])
+    img_transform = Compose(
+        [
+            ToImage(),
+            ToDtype(torch.float32, scale=True),
+            Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+        ]
+    )
+
+    target_transform = Compose(
+        [
+            ToImage(),
+            ToDtype(torch.int64),
+        ]
+    )
 
     val_dataset = Cityscapes(
-        root="./data/cityscapes",  
+        root="./data/cityscapes",
         split="val",
         mode="fine",
         target_type="semantic",
         transform=img_transform,
         target_transform=target_transform,
     )
-    
-    val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False, num_workers=4) 
+
+    val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False, num_workers=4)
 
     model = Model(in_channels=3, n_classes=19, dino_fine_tune=False).to(device)
-    
+
     checkpoint_path = "checkpoints/DINOv3 + unet-training V5/best_model-epoch=0014-val_loss=0.18933865303794542.pt"
-    model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
+    model.load_state_dict(
+        torch.load(checkpoint_path, map_location=device, weights_only=True)
+    )
     model.eval()
 
     num_classes = 19
@@ -99,18 +110,18 @@ def main():
     print("Running inference on validation set...")
     with torch.no_grad():
         from tqdm import tqdm
+
         for i, (images, labels) in enumerate(tqdm(val_loader, desc="Evaluating")):
-            print(f"Processing batch {i+1}/{len(val_loader)}...")
+            print(f"Processing batch {i + 1}/{len(val_loader)}...")
             images = images.to(device)
 
-            labels = labels.apply_(lambda x: id_to_trainid.get(x, 255)).long().squeeze(1)
+            labels = (
+                labels.apply_(lambda x: id_to_trainid.get(x, 255)).long().squeeze(1)
+            )
             labels = labels.to(device)
 
             outputs = sliding_window_inference(
-                model=model, 
-                image_tensor=images, 
-                window_size=(512, 1024), 
-                stride_rate=1
+                model=model, image_tensor=images, window_size=(512, 1024), stride_rate=1
             )
 
             predictions = outputs.argmax(dim=1)
@@ -129,8 +140,16 @@ def main():
         cat_fp = fp[class_ids].sum().item()
         cat_fn = fn[class_ids].sum().item()
 
-        iou = cat_tp / (cat_tp + cat_fp + cat_fn) if (cat_tp + cat_fp + cat_fn) > 0 else 0.0
-        dice = (2 * cat_tp) / (2 * cat_tp + cat_fp + cat_fn) if (2 * cat_tp + cat_fp + cat_fn) > 0 else 0.0
+        iou = (
+            cat_tp / (cat_tp + cat_fp + cat_fn)
+            if (cat_tp + cat_fp + cat_fn) > 0
+            else 0.0
+        )
+        dice = (
+            (2 * cat_tp) / (2 * cat_tp + cat_fp + cat_fn)
+            if (2 * cat_tp + cat_fp + cat_fn) > 0
+            else 0.0
+        )
 
         results[f"Dice_{cat_name}"] = round(dice, 4)
         results[f"IoU_{cat_name}"] = round(iou, 4)
@@ -147,6 +166,7 @@ def main():
 
     with open("final_metrics.json", "w") as f:
         json.dump(results, f, indent=2)
+
 
 if __name__ == "__main__":
     main()

@@ -63,11 +63,14 @@ def postprocess(pred: torch.Tensor, original_shape: tuple) -> np.ndarray:
 
     return prediction_numpy
 
-def sliding_window_inference(model, image_tensor, window_size=(512, 1024), stride_rate=0.5):
+
+def sliding_window_inference(
+    model, image_tensor, window_size=(512, 1024), stride_rate=0.5
+):
     device = image_tensor.device
     B, _, H, W = image_tensor.shape
     w_h, w_w = window_size
-    
+
     stride_h = int(w_h * stride_rate)
     stride_w = int(w_w * stride_rate)
 
@@ -87,9 +90,9 @@ def sliding_window_inference(model, image_tensor, window_size=(512, 1024), strid
 
             crop = image_tensor[:, :, y1:y2, x1:x2]
 
-            with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+            with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                 outputs_normal = model(crop)
-                
+
                 crop_flipped = torch.flip(crop, dims=[3])
                 outputs_flipped = model(crop_flipped)
                 outputs_flipped = torch.flip(outputs_flipped, dims=[3])
@@ -102,6 +105,7 @@ def sliding_window_inference(model, image_tensor, window_size=(512, 1024), strid
 
     final_preds = preds / count_map
     return final_preds
+
 
 def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -134,10 +138,10 @@ def main():
 
             # Forward pass
             pred = sliding_window_inference(
-                model=model, 
-                image_tensor=img_tensor, 
-                window_size=(512, 1024), 
-                stride_rate=0.5
+                model=model,
+                image_tensor=img_tensor,
+                window_size=(512, 1024),
+                stride_rate=0.5,
             )
 
             # Postprocess to segmentation mask

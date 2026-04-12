@@ -115,6 +115,8 @@ def get_args_parser():
     parser.add_argument(
         "--focal-weight", type=float, default=2.0, help="Weight for Focal Loss"
     )
+    parser.add_argument("--accumulation-steps", type=int, default=2,
+                    help="Gradient accumulation steps (because of the small batch size with full sized images, we need to accumulate gradients over multiple batches to effectively have a larger batch size)")
 
     return parser
 
@@ -147,7 +149,7 @@ def main(args):
             1.0,  # building
             2.0,  # wall
             2.0,  # fence
-            2.0,  # pole
+            2.5,  # pole
             2.5,  # traffic light
             2.5,  # traffic sign
             1.0,  # vegetation
@@ -284,7 +286,7 @@ def main(args):
         ).to(device)
 
         blur = v2.GaussianBlur(kernel_size=5, sigma=(0.1, 2.0)).to(device)
-        random_crop = v2.RandomCrop(size=(512, 1024)).to(device)
+        random_crop = v2.RandomCrop(size=(640, 1280)).to(device)
 
         for i, (images, labels) in enumerate(train_dataloader):
             labels = convert_to_train_id(labels)  # Convert class IDs to train IDs
@@ -348,24 +350,26 @@ def main(args):
                     + (args.focal_weight * focal_loss)
                 )
 
+            loss = loss / args.accumulation_steps # Normalize the loss by the accumulation steps
             loss.backward()
 
             # Gradient clipping to prevent exploding gradients, especially
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            if (i + 1) % args.accumulation_steps == 0:  # Update weights every accumulation steps
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
+                optimizer.zero_grad()
 
-            optimizer.step()
-
-            wandb.log(
-                {
-                    "train_loss": loss.item(),
-                    "cross_entropy_loss": args.ce_weight * crossEntropy_loss.item(),
-                    "dice_loss": args.dice_weight * dice_loss.item(),
-                    "focal_loss": args.focal_weight * focal_loss.item(),
-                    "learning_rate": optimizer.param_groups[1]["lr"],
-                    "epoch": epoch + 1,
-                },
-                step=epoch * len(train_dataloader) + i,
-            )
+                wandb.log(
+                    {
+                        "train_loss": loss.item(),
+                        "cross_entropy_loss": args.ce_weight * crossEntropy_loss.item(),
+                        "dice_loss": args.dice_weight * dice_loss.item(),
+                        "focal_loss": args.focal_weight * focal_loss.item(),
+                        "learning_rate": optimizer.param_groups[1]["lr"],
+                        "epoch": epoch + 1,
+                    },
+                    step=epoch * len(train_dataloader) + i,
+                )
 
         # Validation
         model.eval()
@@ -377,6 +381,7 @@ def main(args):
 
             # Reset the dice metric at the start of validation
             dice_metric.reset()
+            server_metric.reset()
 
             for i, (images, labels) in enumerate(valid_dataloader):
                 labels = convert_to_train_id(labels)  # Convert class IDs to train IDs
@@ -386,13 +391,34 @@ def main(args):
 
                 # Use mixed precision for faster validating and reduced memory usage
                 with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-                    outputs = model(images)
-                    outputs = sliding_window_inference(
-                        model=model,
-                        image_tensor=images,
-                        window_size=(512, 1024),
-                        stride_rate=0.5,
-                    )
+                    # outputs = model(images)
+
+                    # to get small objects to appear bigger scale the images.
+                    preds = []
+                    for scale in [1.0, 1.25, 1.5]:
+                        if scale != 1.0:
+                            h = round(images.shape[2] * scale / 16) * 16  # keep divisible by 16
+                            w = round(images.shape[3] * scale / 16) * 16
+                            scaled = F.interpolate(
+                                images, size=(h, w), mode='bilinear', align_corners=False
+                            )
+                        else:
+                            scaled = images
+
+                        pred_scale = sliding_window_inference(
+                            model=model,
+                            image_tensor=scaled,
+                            window_size=(640, 1280),
+                            stride_rate=0.25,
+                        )
+
+                        pred_scale = F.interpolate(
+                            pred_scale, size=images.shape[2:], mode='bilinear', align_corners=False
+                        )
+                        preds.append(pred_scale)
+
+                    outputs = torch.stack(preds).mean(dim=0) 
+
                     # Compute the combined loss (cross-entropy + dice loss)
                     crossEntropy_loss = criterion(outputs, labels)
                     dice_loss = dice_criterion(outputs, labels)
@@ -479,6 +505,10 @@ def main(args):
                 step=(epoch + 1) * len(train_dataloader) - 1,
             )
 
+            if epoch % 4 == 0:
+                periodic_path = os.path.join(output_dir, f"checkpoint-epoch={epoch:04}.pt")
+                torch.save(model.state_dict(), periodic_path)
+
             if valid_loss < best_valid_loss:
                 best_valid_loss = valid_loss
                 if current_best_model_path:
@@ -491,6 +521,8 @@ def main(args):
 
         # Step the learning rate scheduler at the end of each epoch
         scheduler.step()
+
+
 
     print("Training complete!")
 

@@ -7,8 +7,9 @@ python3 train.py \
     --lr 0.001 \
     --num-workers 10 \
     --seed 42 \
-    --experiment-id "DINOv3 + unet-training V6.1" \
+    --experiment-id "DINOv3 + unet-training V6.2" \
     --dino-fine-tune 1 \
     --dice-weight 0.25 \
     --ce-weight 1 \
     --focal-weight 1 \
+    --accumulation-steps 2 \

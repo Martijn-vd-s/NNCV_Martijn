@@ -8,6 +8,4 @@
 #SBATCH --output=logs/%x_%j_.out
 #SBATCH --error=logs/%x_%j_.err    
 
-conda install -c conda-forge pydensecrf
-
 srun apptainer exec --nv --env-file .env container.sif /bin/bash main_eval.sh

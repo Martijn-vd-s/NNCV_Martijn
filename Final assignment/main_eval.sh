@@ -2,6 +2,8 @@
 
 echo "Starting Evaluation..."
 
+pip install pydensecrf 
+
 # Run the evaluation script
 python3 evaluate.py
 

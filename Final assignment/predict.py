@@ -141,10 +141,12 @@ def main():
             preds = []
             for scale in [1.0, 1.5, 2.0]:
                 if scale != 1.0:
-                    h = round(img_tensor.shape[2] * scale / 16) * 16  # keep divisible by 16
+                    h = (
+                        round(img_tensor.shape[2] * scale / 16) * 16
+                    )  # keep divisible by 16
                     w = round(img_tensor.shape[3] * scale / 16) * 16
                     scaled = F.interpolate(
-                        img_tensor, size=(h, w), mode='bilinear', align_corners=False
+                        img_tensor, size=(h, w), mode="bilinear", align_corners=False
                     )
                 else:
                     scaled = img_tensor
@@ -157,11 +159,14 @@ def main():
                 )
 
                 pred_scale = F.interpolate(
-                    pred_scale, size=img_tensor.shape[2:], mode='bilinear', align_corners=False
+                    pred_scale,
+                    size=img_tensor.shape[2:],
+                    mode="bilinear",
+                    align_corners=False,
                 )
                 preds.append(pred_scale)
 
-            pred = torch.stack(preds).mean(dim=0) 
+            pred = torch.stack(preds).mean(dim=0)
 
             # Forward pass
             # pred = sliding_window_inference(

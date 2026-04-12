@@ -115,8 +115,12 @@ def get_args_parser():
     parser.add_argument(
         "--focal-weight", type=float, default=2.0, help="Weight for Focal Loss"
     )
-    parser.add_argument("--accumulation-steps", type=int, default=2,
-                    help="Gradient accumulation steps (because of the small batch size with full sized images, we need to accumulate gradients over multiple batches to effectively have a larger batch size)")
+    parser.add_argument(
+        "--accumulation-steps",
+        type=int,
+        default=2,
+        help="Gradient accumulation steps (because of the small batch size with full sized images, we need to accumulate gradients over multiple batches to effectively have a larger batch size)",
+    )
 
     return parser
 
@@ -350,11 +354,15 @@ def main(args):
                     + (args.focal_weight * focal_loss)
                 )
 
-            loss = loss / args.accumulation_steps # Normalize the loss by the accumulation steps
+            loss = (
+                loss / args.accumulation_steps
+            )  # Normalize the loss by the accumulation steps
             loss.backward()
 
             # Gradient clipping to prevent exploding gradients, especially
-            if (i + 1) % args.accumulation_steps == 0:  # Update weights every accumulation steps
+            if (
+                i + 1
+            ) % args.accumulation_steps == 0:  # Update weights every accumulation steps
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
                 optimizer.zero_grad()
@@ -384,9 +392,11 @@ def main(args):
             server_metric.reset()
 
             for i, (images, labels) in enumerate(valid_dataloader):
-                if i >= 20:  # only validate on a subset of the validation set to save time, since we are logging the metrics to wandb, we can see the trend even with a subset of the validation set
+                if (
+                    i >= 20
+                ):  # only validate on a subset of the validation set to save time, since we are logging the metrics to wandb, we can see the trend even with a subset of the validation set
                     break
-                
+
                 labels = convert_to_train_id(labels)  # Convert class IDs to train IDs
                 images, labels = images.to(device), labels.to(device)
 
@@ -400,10 +410,15 @@ def main(args):
                     preds = []
                     for scale in [1.0, 1.25, 1.5]:
                         if scale != 1.0:
-                            h = round(images.shape[2] * scale / 16) * 16  # keep divisible by 16
+                            h = (
+                                round(images.shape[2] * scale / 16) * 16
+                            )  # keep divisible by 16
                             w = round(images.shape[3] * scale / 16) * 16
                             scaled = F.interpolate(
-                                images, size=(h, w), mode='bilinear', align_corners=False
+                                images,
+                                size=(h, w),
+                                mode="bilinear",
+                                align_corners=False,
                             )
                         else:
                             scaled = images
@@ -416,11 +431,14 @@ def main(args):
                         )
 
                         pred_scale = F.interpolate(
-                            pred_scale, size=images.shape[2:], mode='bilinear', align_corners=False
+                            pred_scale,
+                            size=images.shape[2:],
+                            mode="bilinear",
+                            align_corners=False,
                         )
                         preds.append(pred_scale)
 
-                    outputs = torch.stack(preds).mean(dim=0) 
+                    outputs = torch.stack(preds).mean(dim=0)
 
                     # Compute the combined loss (cross-entropy + dice loss)
                     crossEntropy_loss = criterion(outputs, labels)
@@ -509,7 +527,9 @@ def main(args):
             )
 
             if epoch % 4 == 0:
-                periodic_path = os.path.join(output_dir, f"checkpoint-epoch={epoch:04}.pt")
+                periodic_path = os.path.join(
+                    output_dir, f"checkpoint-epoch={epoch:04}.pt"
+                )
                 torch.save(model.state_dict(), periodic_path)
 
             if valid_loss < best_valid_loss:
@@ -524,8 +544,6 @@ def main(args):
 
         # Step the learning rate scheduler at the end of each epoch
         scheduler.step()
-
-
 
     print("Training complete!")
 

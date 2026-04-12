@@ -20,7 +20,7 @@ RUN apt-get install -y python3 python3-pip git python3-dev pkg-config htop wget
 RUN pip3 install --upgrade pip
 RUN pip3 install torch torchvision
 RUN pip3 install numpy pandas openpyxl scikit-image scikit-learn scipy opencv-python
-RUN pip3 install matplotlib seaborn
+RUN pip3 install matplotlib seaborn pydensecrf
 RUN pip3 install wandb 
 RUN pip3 install transformers diffusers huggingface_hub[cli]
 

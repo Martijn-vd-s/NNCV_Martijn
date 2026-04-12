@@ -1,11 +1,16 @@
 import os
 import json
 import torch
+from pathlib import Path
 from torch.utils.data import DataLoader
 from torchvision.datasets import Cityscapes
 from torchvision.transforms.v2 import Compose, Normalize, ToImage, ToDtype
+from wandb import Image
 from model import Model
 import torch.nn.functional as F
+import pydensecrf.densecrf as dcrf
+from pydensecrf.utils import unary_from_softmax
+import numpy as np
 
 CATEGORY_MAPPING = {
     "Flat": [0, 1],
@@ -17,6 +22,31 @@ CATEGORY_MAPPING = {
     "Vehicle": [13, 14, 15, 16, 17, 18],
 }
 
+def apply_crf(image: np.ndarray, probs: np.ndarray, n_classes=19,
+              bilateral_weight=10, pos_weight=3) -> np.ndarray:
+    H, W = image.shape[:2]
+
+    d = dcrf.DenseCRF2D(W, H, n_classes)
+
+    unary = unary_from_softmax(probs)
+    d.setUnaryEnergy(unary)
+
+    d.addPairwiseBilateral(
+        sxy=80, srgb=13, rgbim=image,
+        compat=bilateral_weight,
+        kernel=dcrf.DIAG_KERNEL,
+        normalization=dcrf.NORMALIZE_SYMMETRIC
+    )
+
+    d.addPairwiseGaussian(
+        sxy=3, compat=pos_weight,
+        kernel=dcrf.DIAG_KERNEL,
+        normalization=dcrf.NORMALIZE_SYMMETRIC
+    )
+
+    # Run inference — 5 iterations is the standard
+    Q = d.inference(5)
+    return np.argmax(Q, axis=0).reshape(H, W)
 
 def fast_hist(a, b, n):
     k = (a >= 0) & (a < n)
@@ -98,7 +128,7 @@ def main():
 
     model = Model(in_channels=3, n_classes=19, dino_fine_tune=False).to(device)
 
-    checkpoint_path = "checkpoints/DINOv3 + unet-training V5/best_model-epoch=0014-val_loss=0.18933865303794542.pt"
+    checkpoint_path = "checkpoints/DINOv3 + unet-training V6.2/best_model-epoch=0018-val_loss=2.2782512307167053.pt"
     model.load_state_dict(
         torch.load(checkpoint_path, map_location=device, weights_only=True)
     )
@@ -108,53 +138,59 @@ def main():
     hist = torch.zeros((num_classes, num_classes), device=device)
     id_to_trainid = {cls.id: cls.train_id for cls in Cityscapes.classes}
 
+    val_image_dir = Path("./data/cityscapes/leftImg8bit/val")
+    image_paths = sorted(val_image_dir.rglob("*_leftImg8bit.png"))
+
     print("Running inference on validation set...")
     with torch.no_grad():
         from tqdm import tqdm
 
-        for i, (images, labels) in enumerate(tqdm(val_loader, desc="Evaluating")):
+        for i, (images, labels), img_path in tqdm(
+            zip(val_loader, image_paths), 
+            total=len(val_loader), 
+            desc="Evaluating"
+            ):
             print(f"Processing batch {i + 1}/{len(val_loader)}...")
             images = images.to(device)
+
+            # raw image for CRF
+            img_np = np.array(Image.open(img_path).convert("RGB"))
 
             labels = (
                 labels.apply_(lambda x: id_to_trainid.get(x, 255)).long().squeeze(1)
             )
             labels = labels.to(device)
 
-            # preds = []
-            # for scale in [1.0, 1.5, 2.0]:
-            #     if scale != 1.0:
-            #         h = round(images.shape[2] * scale / 16) * 16
-            #         w = round(images.shape[3] * scale / 16) * 16
-            #         scaled = F.interpolate(
-            #             images, size=(h, w), mode='bilinear', align_corners=False
-            #         )
-            #     else:
-            #         scaled = images
+            preds = []
+            for scale in [1.0, 1.5, 2.0]:
+                if scale != 1.0:
+                    h = round(images.shape[2] * scale / 16) * 16
+                    w = round(images.shape[3] * scale / 16) * 16
+                    scaled = F.interpolate(
+                        images, size=(h, w), mode='bilinear', align_corners=False
+                    )
+                else:
+                    scaled = images
 
-            #     pred_scale = sliding_window_inference(
-            #         model=model,
-            #         image_tensor=scaled,
-            #         window_size=(640, 1280),
-            #         stride_rate=0.5,
-            #     )
+                pred_scale = sliding_window_inference(
+                    model=model,
+                    image_tensor=scaled,
+                    window_size=(640, 1280),
+                    stride_rate=0.5,
+                )
 
-            #     pred_scale = F.interpolate(
-            #         pred_scale, size=images.shape[2:], mode='bilinear', align_corners=False
-            #     )
-            #     preds.append(pred_scale)
+                pred_scale = F.interpolate(
+                    pred_scale, size=images.shape[2:], mode='bilinear', align_corners=False
+                )
+                preds.append(pred_scale)
 
-            # outputs = torch.stack(preds).mean(dim=0)
+            pred = torch.stack(preds).mean(dim=0) 
 
-            outputs = sliding_window_inference(
-                model=model,
-                image_tensor=images,
-                window_size=(512, 1024),
-                stride_rate=0.5,
-            )
+            probs = pred[0].cpu().float().numpy()     
+            prediction = apply_crf(img_np, probs)       
+            prediction = torch.tensor(prediction, dtype=torch.int64, device=device)
 
-            predictions = outputs.argmax(dim=1)
-            hist += fast_hist(labels.flatten(), predictions.flatten(), num_classes)
+            hist += fast_hist(labels.flatten(), prediction.flatten(), num_classes)
 
     tp = torch.diag(hist)
     fp = hist.sum(dim=0) - tp

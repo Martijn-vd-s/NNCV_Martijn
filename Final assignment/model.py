@@ -2,98 +2,81 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import os
-
-# https://github.com/facebookresearch/dinov3
-# dino citation:
-# @misc{simeoni2025dinov3,
-#   title={{DINOv3}},
-#   author={Sim{\'e}oni, Oriane and Vo, Huy V. and Seitzer, Maximilian and Baldassarre, Federico and Oquab, Maxime and Jose, Cijo and Khalidov, Vasil and Szafraniec, Marc and Yi, Seungeun and Ramamonjisoa, Micha{\"e}l and Massa, Francisco and Haziza, Daniel and Wehrstedt, Luca and Wang, Jianyuan and Darcet, Timoth{\'e}e and Moutakanni, Th{\'e}o and Sentana, Leonel and Roberts, Claire and Vedaldi, Andrea and Tolan, Jamie and Brandt, John and Couprie, Camille and Mairal, Julien and J{\'e}gou, Herv{\'e} and Labatut, Patrick and Bojanowski, Piotr},
-#   year={2025},
-#   eprint={2508.10104},
-#   archivePrefix={arXiv},
-#   primaryClass={cs.CV},
-#   url={https://arxiv.org/abs/2508.10104},
-# }
+from torchvision.models import mobilenet_v3_large
 
 
 class Model(nn.Module):
     """
-    A simple U-Net architecture for image segmentation.
-    Based on the U-Net architecture from the original paper:
-    Olaf Ronneberger et al. (2015), "U-Net: Convolutional Networks for Biomedical Image Segmentation"
-    https://arxiv.org/pdf/1505.04597.pdf
+    Efficient segmentation model for the Cityscapes dataset.
+    Uses MobileNetV3-Large as a pretrained backbone (pretrained on COCO segmentation)
+    with a custom decoder head using ASPP for multi-scale context and
+    Squeeze-and-Excitation attention blocks in the decoder.
 
-    Adapt this model as needed for your problem-specific requirements. You can make multiple model classes and compare them,
-    however, the CodaLab server requires the model class to be named "Model". Also, it will use the default values of the constructor
-    to create the model, so make sure to set the default values of the constructor to the ones you want to use for your submission.
+    MobileNetV3 paper:
+    Howard et al. (2019), "Searching for MobileNetV3"
+    https://arxiv.org/abs/1905.02244
+
+    ASPP from DeepLabV3:
+    Chen et al. (2017), "Rethinking Atrous Convolution for Semantic Image Segmentation"
+    https://arxiv.org/abs/1706.05587
+
+    SE blocks inspo:
+    Hu et al. (2018), "Squeeze-and-Excitation Networks"
+    https://arxiv.org/abs/1709.01507
     """
 
     def __init__(self, in_channels=3, n_classes=19, dino_fine_tune=False):
-        """
-        Args:
-            in_channels (int): Number of input channels. Default is 3 for RGB images.
-            n_classes (int): Number of output classes. Default is 19 for the Cityscapes dataset.
-            dino_fine_tune (bool): Whether to fine-tune the DINO model. Default is False.
-        """
 
         super().__init__()
         self.in_channels = in_channels
-        self.dino_fine_tune = dino_fine_tune
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-        self.repo_dir = os.path.join(BASE_DIR, "facebookresearch_dinov3_main")
 
-        # import 🦖 v3
-        # self.dino = torch.hub.load(
-        #     "facebookresearch/dinov3", "dinov3_vitb16", pretrained=True
-        # )
+        backbone = mobilenet_v3_large(weights=None)
+        weights_path = os.path.join(BASE_DIR, "lraspp_mobilenetv3_pretrained.pth")
+        if os.path.exists(weights_path):
+            full_sd = torch.load(weights_path, map_location="cpu", weights_only=True)
 
-        self.dino = torch.hub.load(
-            repo_or_dir=self.repo_dir,
-            model="dinov3_vitb16",
-            source="local",
-            pretrained=False,
+            backbone_sd = {
+                k[len("backbone."):]: v
+                for k, v in full_sd.items()
+                if k.startswith("backbone.")
+            }
+            backbone.features.load_state_dict(backbone_sd, strict=True)
+            print("[Model] loaded COCO segmentation backbone from", weights_path)
+        else:
+            print("[Model] WARNING: no weights found at", weights_path, "- training from scratch")
+
+
+        # enc1: 16ch  @ H/2
+        # enc2: 24ch  @ H/4
+        # enc3: 40ch  @ H/8
+        # enc4: 112ch @ H/16
+        # enc5: 960ch @ H/16  <- bottleneck
+        f = backbone.features
+        self.enc1 = nn.Sequential(*f[0:2])
+        self.enc2 = nn.Sequential(*f[2:4])
+        self.enc3 = nn.Sequential(*f[4:7])
+        self.enc4 = nn.Sequential(*f[7:13])
+        self.enc5 = nn.Sequential(*f[13:17])
+
+        self.reduce = nn.Sequential(
+            nn.Conv2d(960, 128, kernel_size=1, bias=False),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
         )
 
-        weights_path = os.path.join(
-            BASE_DIR, "dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
-        )
-        state_dict = torch.load(weights_path, map_location="cpu", weights_only=True)
-        self.dino.load_state_dict(state_dict)
-        # freeze DINO for now, we only train the decode, maybe later we can compare what the influence would be if we fine tune the model
-        for name, param in self.dino.named_parameters():
-            if self.dino_fine_tune and any(
-                f"blocks.{i}." in name for i in range(8, 12)
-            ):
-                param.requires_grad = True
-            else:
-                param.requires_grad = False
+        self.aspp = ASPP(128, 128)
 
-        # projection layers to match the CNN
-        self.proj1 = nn.Conv2d(768, 64, kernel_size=1)
-        self.proj2 = nn.Conv2d(768, 128, kernel_size=1)
-        self.proj3 = nn.Conv2d(768, 256, kernel_size=1)
-        self.proj4 = nn.Conv2d(768, 512, kernel_size=1)
-        self.proj5 = nn.Conv2d(768, 512, kernel_size=1)
-
-        # ASPP module for multi-scale context in the bottleneck
-        self.aspp = ASPP(512, 512)
+        # Decoding path with SE attention
+        self.up0 = Up(128 + 112, 128)  # H/32 -> H/16, concat enc4 (112ch)
+        self.up1 = Up(128 + 40, 64)    # H/16 -> H/8,  concat with enc3 (40ch)
+        self.up2 = Up(64  + 24, 48)    # H/8  -> H/4,  concat with enc2 (24ch)
+        self.up3 = Up(48  + 16, 32)    # H/4  -> H/2,  concat with enc1 (16ch)
 
         # dropout for regularization
-        self.dropout = nn.Dropout2d(p=0.2)
+        self.dropout = nn.Dropout2d(p=0.1)
 
-        # Encoding path
-        self.inc = DoubleConv(in_channels, 64)
-        self.down1 = Down(64, 128)
-        self.down2 = Down(128, 256)
-        self.down3 = Down(256, 512)
-        self.down4 = Down(512, 512)
-
-        # Decoding path
-        self.up1 = Up(1024, 256)
-        self.up2 = Up(512, 128)
-        self.up3 = Up(256, 64)
-        self.up4 = Up(128, 64)
-        self.outc = OutConv(64, n_classes)
+        self.outc = OutConv(32, n_classes)
 
     def forward(self, x):
         """
@@ -102,72 +85,40 @@ class Model(nn.Module):
         Args:
             x (torch.Tensor): Input tensor of shape (batch_size, in_channels, height, width).
         """
-        # Check if the input tensor has the expected number of channels
+        # check if the input tensor has the expected number of channels
         if x.shape[1] != self.in_channels:
             raise ValueError(
                 f"Expected {self.in_channels} input channels, but got {x.shape[1]}"
             )
 
-        # CNN Encoder Path
-        x1 = self.inc(x)
-        x2 = self.down1(x1)
-        x3 = self.down2(x2)
-        x4 = self.down3(x3)
-        x5 = self.down4(x4)  # x5 is now 16x16
+        H, W = x.shape[2], x.shape[3]
 
-        x5 = self.aspp(x5)
+        # Encoder path
+        x1 = self.enc1(x)   # 16ch,  H/2
+        x2 = self.enc2(x1)  # 24ch,  H/4
+        x3 = self.enc3(x2)  # 40ch,  H/8
+        x4 = self.enc4(x3)  # 112ch, H/16
+        x5 = self.enc5(x4)  # 960ch, H/16
 
-        # DINOv3 for feature extraction
-        dino_feats = self.dino.get_intermediate_layers(x, n=[2, 5, 8, 11], reshape=True)
-
-        # fusion of DINOv3 features and CNN features
-        x1 = x1 + F.interpolate(
-            self.proj1(dino_feats[0]),
-            size=x1.shape[2:],
-            mode="bilinear",
-            align_corners=False,
-        )
-
-        x2 = x2 + F.interpolate(
-            self.proj2(dino_feats[1]),
-            size=x2.shape[2:],
-            mode="bilinear",
-            align_corners=False,
-        )
-
-        x3 = x3 + F.interpolate(
-            self.proj3(dino_feats[2]),
-            size=x3.shape[2:],
-            mode="bilinear",
-            align_corners=False,
-        )
-        x3 = self.dropout(x3)
-
-        x4 = x4 + F.interpolate(
-            self.proj4(dino_feats[3]),
-            size=x4.shape[2:],
-            mode="bilinear",
-            align_corners=False,
-        )
-        x4 = self.dropout(x4)
-
-        x5 = x5 + self.proj5(
-            dino_feats[3]
-        )  # deepest DINO block feeds the bottleneck too
-        x5 = self.dropout(x5)
+        # Bottleneck: reduce channels then ASPP
+        x5 = self.aspp(self.reduce(x5))  # 960 -> 128 -> ASPP -> 128
 
         # Decoding path
-        x = self.up1(x5, x4)
-        x = self.up2(x, x3)
-        x = self.up3(x, x2)
-        x = self.up4(x, x1)
+        x = self.up0(x5, x4) 
+        x = self.up1(x, x3)  
+        x = self.up2(x, x2)   
+        x = self.up3(x, x1)  
+
+        # upsample back to full input resolution
+        x = F.interpolate(x, size=(H, W), mode="bilinear", align_corners=False)
+        x = self.dropout(x)
+
         logits = self.outc(x)
 
         return logits
 
 
 class DoubleConv(nn.Module):
-    """(convolution => [BN] => ReLU) * 2"""
 
     def __init__(self, in_channels, out_channels, mid_channels=None):
         super().__init__()
@@ -186,23 +137,10 @@ class DoubleConv(nn.Module):
         return self.double_conv(x)
 
 
-class Down(nn.Module):
-    """Downscaling with maxpool then double conv"""
-
-    def __init__(self, in_channels, out_channels):
-        super().__init__()
-        self.maxpool_conv = nn.Sequential(
-            nn.MaxPool2d(2), DoubleConv(in_channels, out_channels)
-        )
-
-    def forward(self, x):
-        return self.maxpool_conv(x)
-
-
 class Up(nn.Module):
     """Upscaling then double conv, followed by Attention!"""
 
-    def __init__(self, in_channels, out_channels, bilinear=True):
+    def __init__(self, in_channels, out_channels):
         super().__init__()
         self.up = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)
         self.conv = DoubleConv(in_channels, out_channels, in_channels // 2)
@@ -212,10 +150,12 @@ class Up(nn.Module):
 
     def forward(self, x1, x2):
         x1 = self.up(x1)
+        # handle odd input sizes
+        x1 = F.interpolate(x1, size=x2.shape[2:], mode="bilinear", align_corners=False)
         x = torch.cat([x2, x1], dim=1)
         x = self.conv(x)
 
-        # Apply attention before passing to the next layer!
+        # apply attention before passing to the next layer!
         return self.se(x)
 
 
@@ -228,7 +168,7 @@ class OutConv(nn.Module):
         return self.conv(x)
 
 
-##### inspo from https://arxiv.org/pdf/2504.05184
+##### inspo from https://arxiv.org/abs/1709.01507
 class SEBlock(nn.Module):
     """Squeeze-and-Excitation Block for channel-wise attention"""
 
@@ -236,9 +176,9 @@ class SEBlock(nn.Module):
         super().__init__()
         self.squeeze = nn.AdaptiveAvgPool2d(1)
         self.excitation = nn.Sequential(
-            nn.Linear(in_channels, in_channels // reduction, bias=False),
+            nn.Linear(in_channels, max(1, in_channels // reduction), bias=False),
             nn.ReLU(inplace=True),
-            nn.Linear(in_channels // reduction, in_channels, bias=False),
+            nn.Linear(max(1, in_channels // reduction), in_channels, bias=False),
             nn.Sigmoid(),
         )
 
@@ -274,7 +214,7 @@ class ASPP(nn.Module):
             nn.AdaptiveAvgPool2d(1), nn.Conv2d(in_channels, out_channels, 1, bias=False)
         )
 
-        # Project all 5 branches down to out_channels
+        # project all 5 branches down to out_channels
         self.project = nn.Sequential(
             nn.Conv2d(out_channels * 5, out_channels, 1, bias=False),
             nn.BatchNorm2d(out_channels),

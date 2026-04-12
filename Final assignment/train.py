@@ -252,23 +252,19 @@ def main(args):
         ignore_index=255,
     ).to(device)
 
-    # seperate dino parameters and unet parameters for training, this way we can tune the dino model with a lower learing rate and keep the unet with a higher learning rate
-    dino_params = [param for name, param in model.named_parameters() if "dino" in name]
-    unet_params = [
-        param for name, param in model.named_parameters() if "dino" not in name
+    backbone_params = [
+        param for name, param in model.named_parameters()
+        if name.startswith(("enc1", "enc2", "enc3", "enc4", "enc5"))
+    ]
+    head_params = [
+        param for name, param in model.named_parameters()
+        if not name.startswith(("enc1", "enc2", "enc3", "enc4", "enc5"))
     ]
 
-    # Define the optimizer -- add weight dacay for regularization
     optimizer = AdamW(
         [
-            {
-                "params": dino_params,
-                "lr": args.lr * 0.005,
-            },  # tiny learning rate for dino
-            {
-                "params": unet_params,
-                "lr": args.lr,
-            },  # normal learning rate for everything else
+            {"params": backbone_params, "lr": args.lr * 0.1}, 
+            {"params": head_params,     "lr": args.lr},       
         ],
         weight_decay=1e-4,
     )
@@ -393,7 +389,7 @@ def main(args):
 
             for i, (images, labels) in enumerate(valid_dataloader):
                 if (
-                    i >= 20
+                    i >= 60
                 ):  # only validate on a subset of the validation set to save time, since we are logging the metrics to wandb, we can see the trend even with a subset of the validation set
                     break
 

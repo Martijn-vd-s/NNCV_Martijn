@@ -2,14 +2,14 @@ wandb login
 
 python3 train.py \
     --data-dir ./data/cityscapes \
-    --batch-size 8 \
+    --batch-size 32 \
     --epochs 100 \
-    --lr 0.001 \
+    --lr 0.0003 \
     --num-workers 10 \
     --seed 42 \
-    --experiment-id "DINOv3 + unet-training V6.2" \
-    --dino-fine-tune 1 \
+    --experiment-id "eff + unet-training V1" \
+    --dino-fine-tune 0 \
     --dice-weight 0.25 \
     --ce-weight 1 \
     --focal-weight 1 \
-    --accumulation-steps 2 \
+    --accumulation-steps 1 \

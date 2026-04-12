@@ -217,7 +217,7 @@ def main(args):
     valid_dataloader = DataLoader(
         valid_dataset,
         batch_size=2,  # use smaller batch size with full sized images to avoid out of memory errors during validation
-        shuffle=False,
+        shuffle=True,
         num_workers=args.num_workers,
     )
 
@@ -384,6 +384,9 @@ def main(args):
             server_metric.reset()
 
             for i, (images, labels) in enumerate(valid_dataloader):
+                if i >= 20:  # only validate on a subset of the validation set to save time, since we are logging the metrics to wandb, we can see the trend even with a subset of the validation set
+                    break
+                
                 labels = convert_to_train_id(labels)  # Convert class IDs to train IDs
                 images, labels = images.to(device), labels.to(device)
 

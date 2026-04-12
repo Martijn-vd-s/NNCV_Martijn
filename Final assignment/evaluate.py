@@ -98,7 +98,7 @@ def main():
 
     model = Model(in_channels=3, n_classes=19, dino_fine_tune=False).to(device)
 
-    checkpoint_path = "checkpoints/DINOv3 + unet-training V6.2/best_model-epoch=0018-val_loss=2.2782512307167053.pt"
+    checkpoint_path = "checkpoints/DINOv3 + unet-training V5/best_model-epoch=0014-val_loss=0.18933865303794542.pt"
     model.load_state_dict(
         torch.load(checkpoint_path, map_location=device, weights_only=True)
     )
@@ -121,30 +121,37 @@ def main():
             )
             labels = labels.to(device)
 
-            preds = []
-            for scale in [1.0, 1.5, 2.0]:
-                if scale != 1.0:
-                    h = round(images.shape[2] * scale / 16) * 16
-                    w = round(images.shape[3] * scale / 16) * 16
-                    scaled = F.interpolate(
-                        images, size=(h, w), mode='bilinear', align_corners=False
-                    )
-                else:
-                    scaled = images
+            # preds = []
+            # for scale in [1.0, 1.5, 2.0]:
+            #     if scale != 1.0:
+            #         h = round(images.shape[2] * scale / 16) * 16
+            #         w = round(images.shape[3] * scale / 16) * 16
+            #         scaled = F.interpolate(
+            #             images, size=(h, w), mode='bilinear', align_corners=False
+            #         )
+            #     else:
+            #         scaled = images
 
-                pred_scale = sliding_window_inference(
-                    model=model,
-                    image_tensor=scaled,
-                    window_size=(640, 1280),
-                    stride_rate=0.5,
-                )
+            #     pred_scale = sliding_window_inference(
+            #         model=model,
+            #         image_tensor=scaled,
+            #         window_size=(640, 1280),
+            #         stride_rate=0.5,
+            #     )
 
-                pred_scale = F.interpolate(
-                    pred_scale, size=images.shape[2:], mode='bilinear', align_corners=False
-                )
-                preds.append(pred_scale)
+            #     pred_scale = F.interpolate(
+            #         pred_scale, size=images.shape[2:], mode='bilinear', align_corners=False
+            #     )
+            #     preds.append(pred_scale)
 
-            outputs = torch.stack(preds).mean(dim=0)
+            # outputs = torch.stack(preds).mean(dim=0)
+
+            outputs = sliding_window_inference(
+                model=model,
+                image_tensor=images,
+                window_size=(512, 1024),
+                stride_rate=0.5,
+            )
 
             predictions = outputs.argmax(dim=1)
             hist += fast_hist(labels.flatten(), predictions.flatten(), num_classes)

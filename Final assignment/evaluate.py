@@ -94,11 +94,11 @@ def main():
         target_transform=target_transform,
     )
 
-    val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False, num_workers=4)
+    val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False, num_workers=10)
 
     model = Model(in_channels=3, n_classes=19, dino_fine_tune=False).to(device)
 
-    checkpoint_path = "checkpoints/DINOv3 + unet-training V6.1/best_model-epoch=0018-val_loss=2.278804065689208.pt"
+    checkpoint_path = "checkpoints/DINOv3 + unet-training V5/best_model-epoch=0014-val_loss=0.18933865303794542.pt"
     model.load_state_dict(
         torch.load(checkpoint_path, map_location=device, weights_only=True)
     )

@@ -8,7 +8,6 @@
 #SBATCH --output=logs/%x_%j_.out
 #SBATCH --error=logs/%x_%j_.err    
 
-# Execute the evaluation script inside the Apptainer container
-pip install git+https://github.com/lucasb-eyer/pydensecrf.git
+conda install -c conda-forge pydensecrf
 
 srun apptainer exec --nv --env-file .env container.sif /bin/bash main_eval.sh

@@ -135,7 +135,7 @@ def main():
                 pred_scale = sliding_window_inference(
                     model=model,
                     image_tensor=scaled,
-                    window_size=(512, 1024),
+                    window_size=(640, 1280),
                     stride_rate=0.5,
                 )
 

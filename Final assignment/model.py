@@ -60,18 +60,17 @@ class Model(nn.Module):
         self.enc5 = nn.Sequential(*f[13:17])
 
         self.reduce = nn.Sequential(
-            nn.Conv2d(960, 128, kernel_size=1, bias=False),
-            nn.BatchNorm2d(128),
+            nn.Conv2d(960, 64, kernel_size=1, bias=False),
+            nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
         )
 
-        self.aspp = ASPP(128, 128)
+        self.aspp = ASPP(64, 64)
 
-        # Decoding path with SE attention
-        self.up0 = Up(128 + 112, 128)  # H/32 -> H/16, concat enc4 (112ch)
-        self.up1 = Up(128 + 40, 64)    # H/16 -> H/8,  concat with enc3 (40ch)
-        self.up2 = Up(64  + 24, 48)    # H/8  -> H/4,  concat with enc2 (24ch)
-        self.up3 = Up(48  + 16, 32)    # H/4  -> H/2,  concat with enc1 (16ch)
+        self.up0 = Up(64 + 112, 96) 
+        self.up1 = Up(96 + 40,  64)
+        self.up2 = Up(64 + 24,  48)
+        self.up3 = Up(48 + 16,  32)
 
         # dropout for regularization
         self.dropout = nn.Dropout2d(p=0.1)
@@ -118,34 +117,33 @@ class Model(nn.Module):
         return logits
 
 
-class DoubleConv(nn.Module):
-
-    def __init__(self, in_channels, out_channels, mid_channels=None):
+class DepthwiseSeparableConv(nn.Module):
+    """Depthwise separable conv"""
+    def __init__(self, in_channels, out_channels):
         super().__init__()
-        if not mid_channels:
-            mid_channels = out_channels
-        self.double_conv = nn.Sequential(
-            nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(mid_channels),
+        self.dw = nn.Sequential(
+            nn.Conv2d(in_channels, in_channels, 3, padding=1, groups=in_channels, bias=False),
+            nn.BatchNorm2d(in_channels),
             nn.ReLU(inplace=True),
-            nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1, bias=False),
+        )
+        self.pw = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, 1, bias=False),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
         )
-
     def forward(self, x):
-        return self.double_conv(x)
-
+        return self.pw(self.dw(x))
 
 class Up(nn.Module):
     """Upscaling then double conv, followed by Attention!"""
 
     def __init__(self, in_channels, out_channels):
         super().__init__()
-        self.up = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)
-        self.conv = DoubleConv(in_channels, out_channels, in_channels // 2)
-
-        # Squeeze-and-Excitation Attention Block
+        self.up   = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)
+        self.conv = nn.Sequential(
+            DepthwiseSeparableConv(in_channels, out_channels),
+            DepthwiseSeparableConv(out_channels, out_channels),  # replaces DoubleConv
+        )
         self.se = SEBlock(out_channels)
 
     def forward(self, x1, x2):

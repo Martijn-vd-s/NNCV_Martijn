@@ -217,6 +217,7 @@ def main(args):
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=args.num_workers,
+        prefetch_factor=4,
     )
     valid_dataloader = DataLoader(
         valid_dataset,
@@ -292,15 +293,15 @@ def main(args):
             labels = convert_to_train_id(labels)  # Convert class IDs to train IDs
             images, labels = images.to(device), labels.to(device)
 
-            # randomly scale images and the labels
-            scale = random.uniform(0.75, 1.5)
-            new_h, new_w = int(1024 * scale), int(2048 * scale)
-            images = F.interpolate(
-                images, size=(new_h, new_w), mode="bilinear", align_corners=False
-            )
-            labels = F.interpolate(
-                labels.float(), size=(new_h, new_w), mode="nearest"
-            ).long()
+            # # randomly scale images and the labels
+            # scale = random.uniform(0.75, 1.5)
+            # new_h, new_w = int(1024 * scale), int(2048 * scale)
+            # images = F.interpolate(
+            #     images, size=(new_h, new_w), mode="bilinear", align_corners=False
+            # )
+            # labels = F.interpolate(
+            #     labels.float(), size=(new_h, new_w), mode="nearest"
+            # ).long()
 
             # randomly crop images and labels
             crop_i, crop_j, crop_h, crop_w = v2.RandomCrop.get_params(

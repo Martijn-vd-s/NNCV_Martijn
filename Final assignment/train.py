@@ -60,7 +60,7 @@ def get_args_parser():
     parser.add_argument("--ce-weight", type=float, default=2.0)
     parser.add_argument("--dice-weight", type=float, default=0.5)
     parser.add_argument("--focal-weight", type=float, default=2.0)
-    parser.add_argument("--kd-weight", type=float, default=1.0)
+    parser.add_argument("--kd-weight", type=float, default=0.1)
     parser.add_argument("--temperature", type=float, default=4.0)
     parser.add_argument("--accumulation-steps", type=int, default=2)
     parser.add_argument(

@@ -9,7 +9,9 @@ python3 train.py \
     --seed 42 \
     --experiment-id "eff + unet-training V2" \
     --dino-fine-tune 0 \
-    --dice-weight 0.5 \
-    --ce-weight 2 \
-    --focal-weight 2 \
-    --accumulation-steps 4 \
+    --dice-weight 0.3 \
+    --ce-weight 1 \
+    --kd-weight 0.1 \
+    --focal-weight 0.1 \
+    --accumulation-steps 2 \
+    --temperature 4.0

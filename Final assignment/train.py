@@ -174,9 +174,9 @@ def main(args):
     img_transform = Compose(
         [
             ToImage(),
-            # Resize(
-            #     (256, 512)
-            # ),  # increase the resolution to 512x1024, since the DINO model is pretrained on higher resolution images, this should help with the performance of the model
+            Resize(
+                (512, 1024)
+            ),  # increase the resolution to 512x1024, since the DINO model is pretrained on higher resolution images, this should help with the performance of the model
             ToDtype(torch.float32, scale=True),
             Normalize(
                 mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)
@@ -310,7 +310,7 @@ def main(args):
             # images = TF.crop(images, crop_i, crop_j, crop_h, crop_w).contiguous()
             # labels = TF.crop(labels, crop_i, crop_j, crop_h, crop_w).contiguous()
 
-            # labels = labels.long().squeeze(1)  # Remove channel dimension
+            labels = labels.long().squeeze(1)  # Remove channel dimension
 
             ### Data Augmentation
             # Random Horizontal Flip, only 50% of the time

@@ -136,45 +136,7 @@ def main():
 
             # Preprocess
             img_tensor = preprocess(img).to(device)
-
-            # to get small objects to appear bigger scale the images.
-            preds = []
-            for scale in [1.0, 2.0]:
-                if scale != 1.0:
-                    h = (
-                        round(img_tensor.shape[2] * scale / 16) * 16
-                    )  # keep divisible by 16
-                    w = round(img_tensor.shape[3] * scale / 16) * 16
-                    scaled = F.interpolate(
-                        img_tensor, size=(h, w), mode="bilinear", align_corners=False
-                    )
-                else:
-                    scaled = img_tensor
-
-                pred_scale = sliding_window_inference(
-                    model=model,
-                    image_tensor=scaled,
-                    window_size=(512, 1024),
-                    stride_rate=1,
-                )
-
-                pred_scale = F.interpolate(
-                    pred_scale,
-                    size=img_tensor.shape[2:],
-                    mode="bilinear",
-                    align_corners=False,
-                )
-                preds.append(pred_scale)
-
-            pred = torch.stack(preds).mean(dim=0)
-
-            # Forward pass
-            # pred = sliding_window_inference(
-            #     model=model,
-            #     image_tensor=img_tensor,
-            #     window_size=(512, 1024),
-            #     stride_rate=0.5,
-            # )
+            pred = model(img_tensor)
 
             # Postprocess to segmentation mask
             seg_pred = postprocess(pred, original_shape)

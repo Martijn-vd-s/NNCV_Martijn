@@ -389,7 +389,7 @@ def main(args):
 
             for i, (images, labels) in enumerate(valid_dataloader):
                 if (
-                    i >= 60
+                    i >= 5
                 ):  # only validate on a subset of the validation set to save time, since we are logging the metrics to wandb, we can see the trend even with a subset of the validation set
                     break
 
@@ -400,41 +400,41 @@ def main(args):
 
                 # Use mixed precision for faster validating and reduced memory usage
                 with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-                    # outputs = model(images)
+                    outputs = model(images)
 
                     # to get small objects to appear bigger scale the images.
-                    preds = []
-                    for scale in [1.0, 1.25, 1.5]:
-                        if scale != 1.0:
-                            h = (
-                                round(images.shape[2] * scale / 16) * 16
-                            )  # keep divisible by 16
-                            w = round(images.shape[3] * scale / 16) * 16
-                            scaled = F.interpolate(
-                                images,
-                                size=(h, w),
-                                mode="bilinear",
-                                align_corners=False,
-                            )
-                        else:
-                            scaled = images
+                    # preds = []
+                    # for scale in [1.0, 1.25, 1.5]:
+                    #     if scale != 1.0:
+                    #         h = (
+                    #             round(images.shape[2] * scale / 16) * 16
+                    #         )  # keep divisible by 16
+                    #         w = round(images.shape[3] * scale / 16) * 16
+                    #         scaled = F.interpolate(
+                    #             images,
+                    #             size=(h, w),
+                    #             mode="bilinear",
+                    #             align_corners=False,
+                    #         )
+                    #     else:
+                    #         scaled = images
 
-                        pred_scale = sliding_window_inference(
-                            model=model,
-                            image_tensor=scaled,
-                            window_size=(640, 1280),
-                            stride_rate=0.25,
-                        )
+                    #     pred_scale = sliding_window_inference(
+                    #         model=model,
+                    #         image_tensor=scaled,
+                    #         window_size=(640, 1280),
+                    #         stride_rate=0.25,
+                    #     )
 
-                        pred_scale = F.interpolate(
-                            pred_scale,
-                            size=images.shape[2:],
-                            mode="bilinear",
-                            align_corners=False,
-                        )
-                        preds.append(pred_scale)
+                    #     pred_scale = F.interpolate(
+                    #         pred_scale,
+                    #         size=images.shape[2:],
+                    #         mode="bilinear",
+                    #         align_corners=False,
+                    #     )
+                    #     preds.append(pred_scale)
 
-                    outputs = torch.stack(preds).mean(dim=0)
+                    # outputs = torch.stack(preds).mean(dim=0)
 
                     # Compute the combined loss (cross-entropy + dice loss)
                     crossEntropy_loss = criterion(outputs, labels)

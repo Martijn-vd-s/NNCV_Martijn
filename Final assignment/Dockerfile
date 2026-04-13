@@ -36,7 +36,8 @@ COPY predict.py /app/predict.py
 COPY model.py /app/model.py
 COPY model.pt /app/model.pt
 
-COPY facebookresearch_dinov3_main /app/facebookresearch_dinov3_main
-COPY dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth /app/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth
+# COPY facebookresearch_dinov3_main /app/facebookresearch_dinov3_main
+# COPY dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth /app/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth
+COPY lraspp_mobilenetv3_pretrained.pth /app/lraspp_mobilenetv3_pretrained.pth
 
 ENTRYPOINT ["python", "/app/predict.py"]

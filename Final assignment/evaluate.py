@@ -85,7 +85,7 @@ def main():
 
     model = Model(in_channels=3, n_classes=19, dino_fine_tune=False).to(device)
 
-    checkpoint_path = "checkpoints/eff + unet-training V1/checkpoint-epoch=0028.pt"
+    checkpoint_path = "checkpoints/eff + unet-training V1.1/checkpoint-epoch=0008.pt"
     model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
     model.eval()
     print(f"Loaded checkpoint: {checkpoint_path}")

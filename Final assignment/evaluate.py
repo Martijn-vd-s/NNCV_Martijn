@@ -158,7 +158,7 @@ def main():
             with torch.autocast(device_type=device.type, dtype=torch.bfloat16):
                 # outputs = model(images)
                 preds = []
-                for scale in [1.0, 2.0]:
+                for scale in [2.0]:
                     if scale != 1.0:
                         h = (
                             round(images.shape[2] * scale / 16) * 16
@@ -173,7 +173,7 @@ def main():
                     pred_scale = sliding_window_inference(
                         model=model,
                         image_tensor=scaled,
-                        window_size=(512, 1024),
+                        window_size=(1024*2, 2048*2),
                         stride_rate=1,
                     )
 

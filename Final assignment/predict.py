@@ -139,7 +139,7 @@ def main():
 
             # to get small objects to appear bigger scale the images.
             preds = []
-            for scale in [1.0, 1.5, 2.0]:
+            for scale in [1.0, 2.0]:
                 if scale != 1.0:
                     h = (
                         round(img_tensor.shape[2] * scale / 16) * 16
@@ -154,8 +154,8 @@ def main():
                 pred_scale = sliding_window_inference(
                     model=model,
                     image_tensor=scaled,
-                    window_size=(640, 1280),
-                    stride_rate=0.5,
+                    window_size=(512, 1024),
+                    stride_rate=1,
                 )
 
                 pred_scale = F.interpolate(

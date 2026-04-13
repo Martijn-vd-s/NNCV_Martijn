@@ -61,6 +61,50 @@ def compute_efficiency_metrics(model, device, input_size=(1, 3, 1024, 2048)):
     return gflops, fps, size_mb
 
 
+
+def sliding_window_inference(
+    model, image_tensor, window_size=(512, 1024), stride_rate=0.5
+    ):
+    device = image_tensor.device
+    B, _, H, W = image_tensor.shape
+    w_h, w_w = window_size
+
+    stride_h = int(w_h * stride_rate)
+    stride_w = int(w_w * stride_rate)
+
+    num_classes = 19
+    preds = torch.zeros((B, num_classes, H, W), device=device)
+    count_map = torch.zeros((B, 1, H, W), device=device)
+
+    h_starts = list(range(0, max(H - w_h + stride_h, 1), stride_h))
+    w_starts = list(range(0, max(W - w_w + stride_w, 1), stride_w))
+
+    for y in h_starts:
+        for x in w_starts:
+            y1 = min(y, H - w_h)
+            y2 = y1 + w_h
+            x1 = min(x, W - w_w)
+            x2 = x1 + w_w
+
+            crop = image_tensor[:, :, y1:y2, x1:x2]
+
+            with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                outputs_normal = model(crop)
+
+                crop_flipped = torch.flip(crop, dims=[3])
+                outputs_flipped = model(crop_flipped)
+                outputs_flipped = torch.flip(outputs_flipped, dims=[3])
+
+            crop_pred = (outputs_normal.float() + outputs_flipped.float()) / 2.0
+            crop_probs = torch.nn.functional.softmax(crop_pred, dim=1)
+
+            preds[:, :, y1:y2, x1:x2] += crop_probs
+            count_map[:, :, y1:y2, x1:x2] += 1
+
+    final_preds = preds / count_map
+    return final_preds
+
+
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Evaluating on {device}...")
@@ -112,7 +156,36 @@ def main():
             labels = labels.apply_(lambda x: id_to_trainid.get(x, 255)).long().squeeze(1).to(device)
 
             with torch.autocast(device_type=device.type, dtype=torch.bfloat16):
-                outputs = model(images)
+                # outputs = model(images)
+                preds = []
+                for scale in [1.0, 2.0]:
+                    if scale != 1.0:
+                        h = (
+                            round(images.shape[2] * scale / 16) * 16
+                        )  # keep divisible by 16
+                        w = round(images.shape[3] * scale / 16) * 16
+                        scaled = F.interpolate(
+                            images, size=(h, w), mode="bilinear", align_corners=False
+                        )
+                    else:
+                        scaled = images
+
+                    pred_scale = sliding_window_inference(
+                        model=model,
+                        image_tensor=scaled,
+                        window_size=(512, 1024),
+                        stride_rate=1,
+                    )
+
+                    pred_scale = F.interpolate(
+                        pred_scale,
+                        size=images.shape[2:],
+                        mode="bilinear",
+                        align_corners=False,
+                    )
+                    preds.append(pred_scale)
+
+                outputs = torch.stack(preds).mean(dim=0)
 
             predictions = outputs.argmax(dim=1)
             hist += fast_hist(labels.flatten(), predictions.flatten(), num_classes)

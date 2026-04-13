@@ -129,7 +129,7 @@ def main():
 
     model = Model(in_channels=3, n_classes=19, dino_fine_tune=False).to(device)
 
-    checkpoint_path = "checkpoints/eff + unet-training V1.1/checkpoint-epoch=0008.pt"
+    checkpoint_path = "checkpoints/eff + unet-training V1.1/checkpoint-epoch=0024.pt"
     model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
     model.eval()
     print(f"Loaded checkpoint: {checkpoint_path}")
@@ -156,36 +156,7 @@ def main():
             labels = labels.apply_(lambda x: id_to_trainid.get(x, 255)).long().squeeze(1).to(device)
 
             with torch.autocast(device_type=device.type, dtype=torch.bfloat16):
-                # outputs = model(images)
-                preds = []
-                for scale in [1.0]:
-                    if scale != 1.0:
-                        h = (
-                            round(images.shape[2] * scale / 16) * 16
-                        )  # keep divisible by 16
-                        w = round(images.shape[3] * scale / 16) * 16
-                        scaled = F.interpolate(
-                            images, size=(h, w), mode="bilinear", align_corners=False
-                        )
-                    else:
-                        scaled = images
-
-                    pred_scale = sliding_window_inference(
-                        model=model,
-                        image_tensor=scaled,
-                        window_size=(512, 1024),
-                        stride_rate=0.75,
-                    )
-
-                    pred_scale = F.interpolate(
-                        pred_scale,
-                        size=images.shape[2:],
-                        mode="bilinear",
-                        align_corners=False,
-                    )
-                    preds.append(pred_scale)
-
-                outputs = torch.stack(preds).mean(dim=0)
+                outputs = model(images)
 
             predictions = outputs.argmax(dim=1)
             hist += fast_hist(labels.flatten(), predictions.flatten(), num_classes)

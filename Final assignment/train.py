@@ -188,7 +188,7 @@ def main(args):
     target_transform = Compose(
         [
             ToImage(),
-            # Resize((256, 512), interpolation=InterpolationMode.NEAREST),
+            Resize((512, 1024), interpolation=InterpolationMode.NEAREST),
             ToDtype(torch.int64),  # no scaling
         ]
     )
@@ -303,14 +303,14 @@ def main(args):
             #     labels.float(), size=(new_h, new_w), mode="nearest"
             # ).long()
 
-            # randomly crop images and labels
-            crop_i, crop_j, crop_h, crop_w = v2.RandomCrop.get_params(
-                images, output_size=(640, 1280)
-            )
-            images = TF.crop(images, crop_i, crop_j, crop_h, crop_w).contiguous()
-            labels = TF.crop(labels, crop_i, crop_j, crop_h, crop_w).contiguous()
+            # # randomly crop images and labels
+            # crop_i, crop_j, crop_h, crop_w = v2.RandomCrop.get_params(
+            #     images, output_size=(512, 1024)
+            # )
+            # images = TF.crop(images, crop_i, crop_j, crop_h, crop_w).contiguous()
+            # labels = TF.crop(labels, crop_i, crop_j, crop_h, crop_w).contiguous()
 
-            labels = labels.long().squeeze(1)  # Remove channel dimension
+            # labels = labels.long().squeeze(1)  # Remove channel dimension
 
             ### Data Augmentation
             # Random Horizontal Flip, only 50% of the time

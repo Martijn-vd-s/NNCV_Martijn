@@ -174,7 +174,7 @@ def main():
                         model=model,
                         image_tensor=scaled,
                         window_size=(512, 1024),
-                        stride_rate=1,
+                        stride_rate=0.75,
                     )
 
                     pred_scale = F.interpolate(

@@ -7,7 +7,7 @@ python3 train.py \
     --lr 0.0003 \
     --num-workers 18 \
     --seed 42 \
-    --experiment-id "eff + unet-training V1.1" \
+    --experiment-id "eff + unet-training V2" \
     --dino-fine-tune 0 \
     --dice-weight 0.25 \
     --ce-weight 1 \

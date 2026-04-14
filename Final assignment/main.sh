@@ -10,6 +10,6 @@ python3 train.py \
     --experiment-id "eff + unet-training V2.1" \
     --dice-weight 1.0 \
     --ce-weight 1 \
-    --focal-weight 1.5 \
+    --focal-weight 0 \
     --accumulation-steps 2 \
     --temperature 4.0

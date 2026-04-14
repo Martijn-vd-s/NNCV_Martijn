@@ -224,7 +224,7 @@ def main(args):
     # Projects student bottleneck (48ch) to teacher feature space (512ch)
     feat_projector = FeatureAlignProjector(student_ch=48, teacher_ch=512).to(device)
 
-    ohem_criterion  = OHEMLoss(ignore_index=255)
+    ohem_criterion = OHEMLoss(ignore_index=255, thresh=0.9, min_kept=20000)
     dice_criterion  = smp.losses.DiceLoss(mode="multiclass", classes=19, ignore_index=255)
     focal_criterion = smp.losses.FocalLoss(mode="multiclass", ignore_index=255)
 
@@ -239,7 +239,7 @@ def main(args):
     optimizer = AdamW(
         [
             {"params": backbone_params,              "lr": args.lr * 0.1},
-            {"params": head_params,                  "lr": args.lr},
+            {"params": head_params,                  "lr": args.lr * 2.0},
             {"params": feat_projector.parameters(),  "lr": args.lr},
         ],
         weight_decay=1e-4,

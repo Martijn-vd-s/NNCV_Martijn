@@ -146,7 +146,7 @@ class Model(nn.Module):
         self.up3 = Up(32 + 32, 24)
 
         self.dropout = nn.Dropout2d(p=0.1)
-        self.outc    = OutConv(24, n_classes)
+        self.outc    = OutConv(32, n_classes)
 
     def forward(self, x):
         if x.shape[1] != self.in_channels:

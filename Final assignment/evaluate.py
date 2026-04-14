@@ -4,7 +4,9 @@ import time
 import torch
 from torch.utils.data import DataLoader
 from torchvision.datasets import Cityscapes
-from torchvision.transforms.v2 import Compose, Normalize, ToImage, ToDtype
+from torchvision.transforms.v2 import (
+    Compose, Normalize, Resize, ToImage, ToDtype, InterpolationMode,
+)
 from model import Model
 import torch.nn.functional as F
 
@@ -116,6 +118,7 @@ def main():
     ])
     target_transform = Compose([
         ToImage(),
+        Resize((512, 1024), interpolation=InterpolationMode.NEAREST),
         ToDtype(torch.int64),
     ])
 

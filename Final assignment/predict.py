@@ -43,7 +43,7 @@ def preprocess(img: Image.Image) -> torch.Tensor:
     transform = Compose(
         [
             ToImage(),
-            # Resize((256, 512)),
+            Resize((512, 1024), interpolation=InterpolationMode.BILINEAR),
             ToDtype(torch.float32, scale=True),
             Normalize(
                 mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)
@@ -57,11 +57,15 @@ def preprocess(img: Image.Image) -> torch.Tensor:
 
 
 def postprocess(pred: torch.Tensor, original_shape: tuple) -> np.ndarray:
-    pred_max = torch.argmax(pred, dim=1, keepdim=True)
+    pred = F.interpolate(
+        pred,
+        size=original_shape,
+        mode="bilinear",
+        align_corners=False,
+    )
+    pred_max = torch.argmax(pred, dim=1)
 
-    prediction_numpy = pred_max.cpu().detach().numpy()
-    prediction_numpy = prediction_numpy.squeeze()
-
+    prediction_numpy = pred_max.squeeze(0).cpu().numpy().astype(np.uint8)
     return prediction_numpy
 
 

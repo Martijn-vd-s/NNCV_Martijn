@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import os
-from torchvision.models import mobilenet_v3_large
+from efficientvit.models.efficientvit import efficientvit_backbone_b0
 
 
 class DepthwiseSeparableConv(nn.Module):
@@ -110,7 +110,7 @@ class OutConv(nn.Module):
 
 class Model(nn.Module):
     """
-    Efficient U-Net with MobileNetV3 encoder,
+    Efficient U-Net with EfficientViT-B0 encoder, https://github.com/CVHub520/efficientvit?tab=readme-ov-file 
     DAPPM bottleneck, lightweight decoder.
 
     Key refs:
@@ -123,35 +123,27 @@ class Model(nn.Module):
         self.in_channels = in_channels
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-        backbone = mobilenet_v3_large(weights=None)
-        weights_path = os.path.join(BASE_DIR, "lraspp_mobilenetv3_pretrained.pth")
+        self.backbone = efficientvit_backbone_b0(pretrained=False)
+
+        weights_path = os.path.join(BASE_DIR, "b0.pt")
         if os.path.exists(weights_path):
-            full_sd = torch.load(weights_path, map_location="cpu", weights_only=True)
-            backbone_sd = {k[len("backbone."):]: v for k, v in full_sd.items()
-                           if k.startswith("backbone.")}
-            backbone.features.load_state_dict(backbone_sd, strict=True)
-            print("[Model] loaded COCO backbone from", weights_path)
+            state_dict = torch.load(weights_path, map_location="cpu", weights_only=True)
+            missing, unexpected = self.backbone.load_state_dict(state_dict, strict=False)
+            print("[Model] loaded EfficientViT-B0 from", weights_path)
+            print("[Model] missing keys:", missing)
+            print("[Model] unexpected keys:", unexpected)
         else:
             print("[Model] WARNING: no weights at", weights_path)
 
-        f = backbone.features
-
-        self.enc1 = nn.Sequential(*f[0:2])
-        self.enc2 = nn.Sequential(*f[2:4])
-        self.enc3 = nn.Sequential(*f[4:7])
-        self.enc4 = nn.Sequential(*f[7:13])   # stop here — drop enc5!
-
-        # Reduce 112 -> 48, then DAPPM (much cheaper than 960→64→ASPP)
         self.reduce = nn.Sequential(
-            nn.Conv2d(112, 48, 1, bias=False),
+            nn.Conv2d(128, 48, 1, bias=False),
             nn.BatchNorm2d(48), nn.ReLU(inplace=True),
         )
-        self.dappm = DAPPM(48, 24, 48)   # in=48, branch=24, out=48
+        self.dappm = DAPPM(48, 24, 48)
 
-        # Decoder halved channel widths vs. original
-        self.up1 = Up(48 + 40, 48)   # merge with enc3
-        self.up2 = Up(48 + 24, 32)   # merge with enc2
-        self.up3 = Up(32 + 16, 24)   # merge with enc1
+        self.up1 = Up(48 + 64, 48)
+        self.up2 = Up(48 + 32, 32)
+        self.up3 = Up(32 + 32, 24)
 
         self.dropout = nn.Dropout2d(p=0.1)
         self.outc    = OutConv(24, n_classes)
@@ -161,17 +153,17 @@ class Model(nn.Module):
             raise ValueError(f"Expected {self.in_channels} channels, got {x.shape[1]}")
         H, W = x.shape[2], x.shape[3]
 
-        x1 = self.enc1(x)              # 16ch  H/2
-        x2 = self.enc2(x1)             # 24ch  H/4
-        x3 = self.enc3(x2)             # 40ch  H/8
-        x4 = self.enc4(x3)             # 112ch H/16
+        feats = self.backbone(x)
+        x2 = feats["stage2"]
+        x3 = feats["stage3"]
+        x4 = feats["stage4"]
 
-        bottleneck = self.dappm(self.reduce(x4))   # 48ch H/16
-        self._bottleneck = bottleneck 
+        bottleneck = self.dappm(self.reduce(x4))
+        self._bottleneck = bottleneck
 
-        x = self.up1(bottleneck, x3)   # 48ch H/8
-        x = self.up2(x, x2)            # 32ch H/4
-        x = self.up3(x, x1)            # 24ch H/2
+        x = self.up1(bottleneck, x3)
+        x = self.up2(x, x2)
+        # x = self.up3(x, feats["stage1"])
 
         x = F.interpolate(x, size=(H, W), mode='bilinear', align_corners=False)
         return self.outc(self.dropout(x))

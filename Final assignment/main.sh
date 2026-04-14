@@ -1,5 +1,7 @@
 wandb login
 
+pip install git+https://github.com/mit-han-lab/efficientvit.git
+
 python3 train.py \
     --data-dir ./data/cityscapes \
     --batch-size 8 \

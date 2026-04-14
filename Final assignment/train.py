@@ -239,7 +239,7 @@ def main(args):
     optimizer = AdamW(
         [
             {"params": backbone_params,              "lr": args.lr * 0.1},
-            {"params": head_params,                  "lr": args.lr * 2.0},
+            {"params": head_params,                  "lr": args.lr * 5.0},
             {"params": feat_projector.parameters(),  "lr": args.lr},
         ],
         weight_decay=1e-4,

@@ -232,14 +232,14 @@ def main(args):
     server_metric = MulticlassF1Score(num_classes=19, average=None,    ignore_index=255).to(device)
 
     backbone_params = [p for n, p in model.named_parameters()
-                       if n.startswith(("enc1", "enc2", "enc3", "enc4"))]
+                    if n.startswith("backbone.")]
     head_params     = [p for n, p in model.named_parameters()
-                       if not n.startswith(("enc1", "enc2", "enc3", "enc4"))]
+                    if not n.startswith("backbone.")]
 
     optimizer = AdamW(
         [
             {"params": backbone_params,              "lr": args.lr * 0.1},
-            {"params": head_params,                  "lr": args.lr * 5.0},
+            {"params": head_params,                  "lr": args.lr * 2.5},
             {"params": feat_projector.parameters(),  "lr": args.lr},
         ],
         weight_decay=1e-4,

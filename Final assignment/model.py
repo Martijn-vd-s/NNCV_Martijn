@@ -57,9 +57,9 @@ class DAPPM(nn.Module):
             nn.Sequential(nn.AvgPool2d(9, 1, 4),
                           nn.Conv2d(in_ch, branch_ch, 1, bias=False),
                           nn.BatchNorm2d(branch_ch), nn.ReLU(inplace=True)),
-            nn.Sequential(nn.AvgPool2d(17, 1, 8),
-                          nn.Conv2d(in_ch, branch_ch, 1, bias=False),
-                          nn.BatchNorm2d(branch_ch), nn.ReLU(inplace=True)),
+            # nn.Sequential(nn.AvgPool2d(17, 1, 8),
+            #               nn.Conv2d(in_ch, branch_ch, 1, bias=False),
+            #               nn.BatchNorm2d(branch_ch), nn.ReLU(inplace=True)),
         ])
         # identity branch
         self.identity = nn.Sequential(
@@ -89,17 +89,11 @@ class DAPPM(nn.Module):
 class Up(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
-        self.up   = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
-        self.conv = nn.Sequential(
-            DepthwiseSeparableConv(in_channels, out_channels),
-            DepthwiseSeparableConv(out_channels, out_channels),
-        )
-        self.se = SEBlock(out_channels, reduction=8)
+        self.conv = DepthwiseSeparableConv(in_channels, out_channels)
 
     def forward(self, x1, x2):
-        x1 = F.interpolate(self.up(x1), size=x2.shape[2:],
-                           mode='bilinear', align_corners=False)
-        return self.se(self.conv(torch.cat([x2, x1], dim=1)))
+        x1 = F.interpolate(x1, size=x2.shape[2:], mode='bilinear', align_corners=False)
+        return self.conv(torch.cat([x2, x1], dim=1))
 
 
 class OutConv(nn.Module):

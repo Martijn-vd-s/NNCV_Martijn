@@ -279,7 +279,7 @@ def main(args):
                 images = color_jitter(images)
             if torch.rand(1) < 0.3:
                 images = blur(images)
-            if torch.rand(1) < 0.5:
+            if torch.rand(1) < 0.25:
                 images, labels = cutmix(images, labels)
 
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16):

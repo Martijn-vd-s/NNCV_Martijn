@@ -1,169 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import os
-
-# https://github.com/facebookresearch/dinov3
-# dino citation:
-# @misc{simeoni2025dinov3,
-#   title={{DINOv3}},
-#   author={Sim{\'e}oni, Oriane and Vo, Huy V. and Seitzer, Maximilian and Baldassarre, Federico and Oquab, Maxime and Jose, Cijo and Khalidov, Vasil and Szafraniec, Marc and Yi, Seungeun and Ramamonjisoa, Micha{\"e}l and Massa, Francisco and Haziza, Daniel and Wehrstedt, Luca and Wang, Jianyuan and Darcet, Timoth{\'e}e and Moutakanni, Th{\'e}o and Sentana, Leonel and Roberts, Claire and Vedaldi, Andrea and Tolan, Jamie and Brandt, John and Couprie, Camille and Mairal, Julien and J{\'e}gou, Herv{\'e} and Labatut, Patrick and Bojanowski, Piotr},
-#   year={2025},
-#   eprint={2508.10104},
-#   archivePrefix={arXiv},
-#   primaryClass={cs.CV},
-#   url={https://arxiv.org/abs/2508.10104},
-# }
-
-
-class Model(nn.Module):
-    """
-    A simple U-Net architecture for image segmentation.
-    Based on the U-Net architecture from the original paper:
-    Olaf Ronneberger et al. (2015), "U-Net: Convolutional Networks for Biomedical Image Segmentation"
-    https://arxiv.org/pdf/1505.04597.pdf
-
-    Adapt this model as needed for your problem-specific requirements. You can make multiple model classes and compare them,
-    however, the CodaLab server requires the model class to be named "Model". Also, it will use the default values of the constructor
-    to create the model, so make sure to set the default values of the constructor to the ones you want to use for your submission.
-    """
-
-    def __init__(self, in_channels=3, n_classes=19, dino_fine_tune=False):
-        """
-        Args:
-            in_channels (int): Number of input channels. Default is 3 for RGB images.
-            n_classes (int): Number of output classes. Default is 19 for the Cityscapes dataset.
-            dino_fine_tune (bool): Whether to fine-tune the DINO model. Default is False.
-        """
-
-        super().__init__()
-        self.in_channels = in_channels
-        self.dino_fine_tune = dino_fine_tune
-        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-        self.repo_dir = os.path.join(BASE_DIR, "facebookresearch_dinov3_main")
-
-        # import 🦖 v3
-        # self.dino = torch.hub.load(
-        #     "facebookresearch/dinov3", "dinov3_vitb16", pretrained=True
-        # )
-
-        self.dino = torch.hub.load(
-            repo_or_dir=self.repo_dir,
-            model="dinov3_vitb16",
-            source="local",
-            pretrained=False,
-        )
-
-        weights_path = os.path.join(
-            BASE_DIR, "dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
-        )
-        state_dict = torch.load(weights_path, map_location="cpu", weights_only=True)
-        self.dino.load_state_dict(state_dict)
-        # freeze DINO for now, we only train the decode, maybe later we can compare what the influence would be if we fine tune the model
-        for name, param in self.dino.named_parameters():
-            if self.dino_fine_tune and any(
-                f"blocks.{i}." in name for i in range(8, 12)
-            ):
-                param.requires_grad = True
-            else:
-                param.requires_grad = False
-
-        # projection layers to match the CNN
-        self.proj1 = nn.Conv2d(768, 64, kernel_size=1)
-        self.proj2 = nn.Conv2d(768, 128, kernel_size=1)
-        self.proj3 = nn.Conv2d(768, 256, kernel_size=1)
-        self.proj4 = nn.Conv2d(768, 512, kernel_size=1)
-        self.proj5 = nn.Conv2d(768, 512, kernel_size=1)
-
-        # ASPP module for multi-scale context in the bottleneck
-        self.aspp = ASPP(512, 512)
-
-        # dropout for regularization
-        self.dropout = nn.Dropout2d(p=0.2)
-
-        # Encoding path
-        self.inc = DoubleConv(in_channels, 64)
-        self.down1 = Down(64, 128)
-        self.down2 = Down(128, 256)
-        self.down3 = Down(256, 512)
-        self.down4 = Down(512, 512)
-
-        # Decoding path
-        self.up1 = Up(1024, 256)
-        self.up2 = Up(512, 128)
-        self.up3 = Up(256, 64)
-        self.up4 = Up(128, 64)
-        self.outc = OutConv(64, n_classes)
-
-    def forward(self, x):
-        """
-        Forward pass through the model.
-
-        Args:
-            x (torch.Tensor): Input tensor of shape (batch_size, in_channels, height, width).
-        """
-        # Check if the input tensor has the expected number of channels
-        if x.shape[1] != self.in_channels:
-            raise ValueError(
-                f"Expected {self.in_channels} input channels, but got {x.shape[1]}"
-            )
-
-        # CNN Encoder Path
-        x1 = self.inc(x)
-        x2 = self.down1(x1)
-        x3 = self.down2(x2)
-        x4 = self.down3(x3)
-        x5 = self.down4(x4)  # x5 is now 16x16
-
-        x5 = self.aspp(x5)
-
-        # DINOv3 for feature extraction
-        dino_feats = self.dino.get_intermediate_layers(x, n=[2, 5, 8, 11], reshape=True)
-
-        # fusion of DINOv3 features and CNN features
-        x1 = x1 + F.interpolate(
-            self.proj1(dino_feats[0]),
-            size=x1.shape[2:],
-            mode="bilinear",
-            align_corners=False,
-        )
-
-        x2 = x2 + F.interpolate(
-            self.proj2(dino_feats[1]),
-            size=x2.shape[2:],
-            mode="bilinear",
-            align_corners=False,
-        )
-
-        x3 = x3 + F.interpolate(
-            self.proj3(dino_feats[2]),
-            size=x3.shape[2:],
-            mode="bilinear",
-            align_corners=False,
-        )
-        x3 = self.dropout(x3)
-
-        x4 = x4 + F.interpolate(
-            self.proj4(dino_feats[3]),
-            size=x4.shape[2:],
-            mode="bilinear",
-            align_corners=False,
-        )
-        x4 = self.dropout(x4)
-
-        x5 = x5 + self.proj5(
-            dino_feats[3]
-        )  # deepest DINO block feeds the bottleneck too
-        x5 = self.dropout(x5)
-
-        # Decoding path
-        x = self.up1(x5, x4)
-        x = self.up2(x, x3)
-        x = self.up3(x, x2)
-        x = self.up4(x, x1)
-        logits = self.outc(x)
-
-        return logits
+from transformers import SegformerModel
 
 
 class DoubleConv(nn.Module):
@@ -186,37 +24,33 @@ class DoubleConv(nn.Module):
         return self.double_conv(x)
 
 
-class Down(nn.Module):
-    """Downscaling with maxpool then double conv"""
-
-    def __init__(self, in_channels, out_channels):
-        super().__init__()
-        self.maxpool_conv = nn.Sequential(
-            nn.MaxPool2d(2), DoubleConv(in_channels, out_channels)
-        )
-
-    def forward(self, x):
-        return self.maxpool_conv(x)
-
-
 class Up(nn.Module):
     """Upscaling then double conv, followed by Attention!"""
 
-    def __init__(self, in_channels, out_channels, bilinear=True):
+    def __init__(self, in_channels, out_channels):
         super().__init__()
         self.up = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)
         self.conv = DoubleConv(in_channels, out_channels, in_channels // 2)
-
-        # Squeeze-and-Excitation Attention Block
         self.se = SEBlock(out_channels)
 
     def forward(self, x1, x2):
         x1 = self.up(x1)
+        x1 = F.interpolate(x1, size=x2.shape[2:], mode="bilinear", align_corners=False)
         x = torch.cat([x2, x1], dim=1)
-        x = self.conv(x)
+        return self.se(self.conv(x))
 
-        # Apply attention before passing to the next layer!
-        return self.se(x)
+
+class UpNoSkip(nn.Module):
+    """Upscaling then double conv with no skip connection — for the final upsample stages"""
+
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.up = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)
+        self.conv = DoubleConv(in_channels, out_channels)
+        self.se = SEBlock(out_channels)
+
+    def forward(self, x):
+        return self.se(self.conv(self.up(x)))
 
 
 class OutConv(nn.Module):
@@ -236,19 +70,16 @@ class SEBlock(nn.Module):
         super().__init__()
         self.squeeze = nn.AdaptiveAvgPool2d(1)
         self.excitation = nn.Sequential(
-            nn.Linear(in_channels, in_channels // reduction, bias=False),
+            nn.Linear(in_channels, max(1, in_channels // reduction), bias=False),
             nn.ReLU(inplace=True),
-            nn.Linear(in_channels // reduction, in_channels, bias=False),
+            nn.Linear(max(1, in_channels // reduction), in_channels, bias=False),
             nn.Sigmoid(),
         )
 
     def forward(self, x):
         b, c, _, _ = x.size()
-        # Squeeze
         y = self.squeeze(x).view(b, c)
-        # Excite
         y = self.excitation(y).view(b, c, 1, 1)
-        # Scale the input
         return x * y.expand_as(x)
 
 
@@ -257,24 +88,14 @@ class ASPP(nn.Module):
 
     def __init__(self, in_channels, out_channels):
         super().__init__()
-        # 1x1 conv, and 3x3 dilated convs
         self.conv1 = nn.Conv2d(in_channels, out_channels, 1, bias=False)
-        self.conv2 = nn.Conv2d(
-            in_channels, out_channels, 3, padding=2, dilation=2, bias=False
-        )
-        self.conv3 = nn.Conv2d(
-            in_channels, out_channels, 3, padding=4, dilation=4, bias=False
-        )
-        self.conv4 = nn.Conv2d(
-            in_channels, out_channels, 3, padding=8, dilation=8, bias=False
-        )
-
-        # Global Average Pooling branch
+        self.conv2 = nn.Conv2d(in_channels, out_channels, 3, padding=2,  dilation=2,  bias=False)
+        self.conv3 = nn.Conv2d(in_channels, out_channels, 3, padding=4,  dilation=4,  bias=False)
+        self.conv4 = nn.Conv2d(in_channels, out_channels, 3, padding=8,  dilation=8,  bias=False)
         self.pool = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1), nn.Conv2d(in_channels, out_channels, 1, bias=False)
+            nn.AdaptiveAvgPool2d(1),
+            nn.Conv2d(in_channels, out_channels, 1, bias=False),
         )
-
-        # Project all 5 branches down to out_channels
         self.project = nn.Sequential(
             nn.Conv2d(out_channels * 5, out_channels, 1, bias=False),
             nn.BatchNorm2d(out_channels),
@@ -289,10 +110,80 @@ class ASPP(nn.Module):
         res5 = F.interpolate(
             self.pool(x), size=x.shape[2:], mode="bilinear", align_corners=False
         )
+        return self.project(torch.cat([res1, res2, res3, res4, res5], dim=1))
 
-        res = torch.cat([res1, res2, res3, res4, res5], dim=1)
-        return self.project(res)
+
+class Model(nn.Module):
+    """
+    U-Net with SegFormer-B5 encoder for semantic segmentation on Cityscapes.
+
+    SegFormer-B5 produces 4-scale feature maps natively 
+    Decoder mirrors the original DINOv3 U-Net
+    depth with 4 upsampling stages + SE attention.
+
+    Key refs:
+      - SegFormer: Xie et al. (2021) https://arxiv.org/abs/2105.15203
+      - U-Net: Ronneberger et al. (2015) https://arxiv.org/pdf/1505.04597.pdf
+      - SE-Net: Hu et al. (2018) https://arxiv.org/abs/1709.01507
+      - ASPP: Chen et al. (2017) https://arxiv.org/abs/1706.05587
+    """
+
+    def __init__(self, in_channels=3, n_classes=19, dino_fine_tune=False):
+        super().__init__()
+        self.in_channels = in_channels
+
+        # SegFormer-B5 encoder — pretrained on ImageNet
+        # outputs 4 feature maps: H/4, H/8, H/16, H/32
+        # channels:               [64,  128,  320,  512]
+        self.encoder = SegformerModel.from_pretrained("./mit-b5", output_hidden_states=True)
+
+        # freeze all, then unfreeze last two stages for fine-tuning
+        for param in self.encoder.parameters():
+            param.requires_grad = False
+        for name, param in self.encoder.named_parameters():
+            if "encoder.block.2" in name or "encoder.block.3" in name:
+                param.requires_grad = True
+
+        # bottleneck
+        self.aspp = ASPP(512, 512)
+        self.dropout = nn.Dropout2d(p=0.2)
+
+        # Decoding path — 4 stages matching your original depth
+        # SegFormer-B5 stage channels: s1=64, s2=128, s3=320, s4=512
+        self.up1 = Up(512 + 320, 256)    # s4 + s3  -> 256ch  H/16
+        self.up2 = Up(256 + 128, 128)    # up1 + s2 -> 128ch  H/8
+        self.up3 = Up(128 + 64,   64)    # up2 + s1 ->  64ch  H/4
+        self.up4 = UpNoSkip(64,   64)    # no skip  ->  64ch  H/2
+        self.outc = OutConv(64, n_classes)
+
+    def forward(self, x):
+        if x.shape[1] != self.in_channels:
+            raise ValueError(
+                f"Expected {self.in_channels} input channels, but got {x.shape[1]}"
+            )
+        H, W = x.shape[2], x.shape[3]
+
+        # encode
+        out = self.encoder(pixel_values=x, output_hidden_states=True)
+        s1, s2, s3, s4 = out.hidden_states   # H/4, H/8, H/16, H/32
+
+        # bottleneck
+        s4 = self.aspp(s4)
+        s4 = self.dropout(s4)
+
+        # decode
+        x = self.up1(s4, s3)   # 256ch  H/16
+        x = self.up2(x,  s2)   # 128ch  H/8
+        x = self.up3(x,  s1)   #  64ch  H/4
+        x = self.up4(x)        #  64ch  H/2
+
+        # final upsample to full resolution
+        x = F.interpolate(x, size=(H, W), mode="bilinear", align_corners=False)
+        return self.outc(x)
 
 
 if __name__ == "__main__":
     model = Model()
+    dummy = torch.randn(2, 3, 512, 1024)
+    out = model(dummy)
+    print(out.shape)   # should be (2, 19, 512, 1024)

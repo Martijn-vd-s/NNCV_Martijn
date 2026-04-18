@@ -4,7 +4,7 @@
 #SBATCH --gpus=1
 #SBATCH --partition=gpu_mig
 #SBATCH --time=00:15:00
-#SBATCH --job-name=Eval-eff-Unet-V1 
+#SBATCH --job-name=Eval-eff-Unet-V3 
 #SBATCH --output=logs/%x_%j_.out
 #SBATCH --error=logs/%x_%j_.err    
 

@@ -2,9 +2,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import os
+
+# import sys
+# sys.path.insert(0, "/opt")
+# from efficientvit.applications.dc_ae.dc_ae_generate_latent import BASE_DIR
 from efficientvit.models.efficientvit import efficientvit_backbone_b0
-
-
 class DepthwiseSeparableConv(nn.Module):
     def __init__(self, in_channels, out_channels, stride=1):
         super().__init__()
@@ -127,8 +129,23 @@ class Model(nn.Module):
 
         weights_path = os.path.join(BASE_DIR, "b0.pt")
         if os.path.exists(weights_path):
-            state_dict = torch.load(weights_path, map_location="cpu", weights_only=True)
-            missing, unexpected = self.backbone.load_state_dict(state_dict, strict=False)
+            # 1. Load the checkpoint
+            checkpoint = torch.load(weights_path, map_location="cpu", weights_only=True)
+            
+            # 2. Extract the state_dict
+            state_dict = checkpoint.get('state_dict', checkpoint)
+            
+            # 3. Filter and rename keys specifically for the backbone
+            backbone_weights = {}
+            for key, value in state_dict.items():
+                if key.startswith('backbone.'):
+                    # Remove the 'backbone.' prefix (length of 9)
+                    new_key = key[9:] 
+                    backbone_weights[new_key] = value
+
+            # 4. Load the cleaned weights into self.backbone
+            missing, unexpected = self.backbone.load_state_dict(backbone_weights, strict=False)
+            
             print("[Model] loaded EfficientViT-B0 from", weights_path)
             print("[Model] missing keys:", missing)
             print("[Model] unexpected keys:", unexpected)
@@ -167,3 +184,13 @@ class Model(nn.Module):
 
         x = F.interpolate(x, size=(H, W), mode='bilinear', align_corners=False)
         return self.outc(self.dropout(x))
+
+if __name__ == "__main__":
+    # BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    # weights_path = os.path.join(BASE_DIR, "b0.pt")
+    # ckpt = torch.load(weights_path, map_location="cpu", weights_only=True)
+    # print(type(ckpt))
+    # print(ckpt.keys() if isinstance(ckpt, dict) else "not a dict")
+
+    model = Model()
+

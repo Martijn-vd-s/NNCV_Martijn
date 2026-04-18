@@ -4,3 +4,4 @@ data/
 *.pt
 *.pth
 facebookresearch_dinov3_main
+mit-b5

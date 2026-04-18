@@ -284,34 +284,34 @@ def main(args):
 
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                 outputs = model(images)
-                student_bottleneck = model._bottleneck  # set inside Model.forward()
+                # student_bottleneck = model._bottleneck  # set inside Model.forward()
 
-                with torch.no_grad():
-                    teacher_out    = teacher(pixel_values=images)
-                    teacher_logits = F.interpolate(
-                        teacher_out.logits, size=images.shape[2:],
-                        mode="bilinear", align_corners=False,
-                    )
-                    # Resize teacher's last hidden state to match student bottleneck (H/16)
-                    teacher_feat = F.interpolate(
-                        teacher_out.hidden_states[-1],
-                        size=student_bottleneck.shape[2:],
-                        mode="bilinear", align_corners=False,
-                    )
+                # with torch.no_grad():
+                    # teacher_out    = teacher(pixel_values=images)
+                    # teacher_logits = F.interpolate(
+                    #     teacher_out.logits, size=images.shape[2:],
+                    #     mode="bilinear", align_corners=False,
+                    # )
+                    # # Resize teacher's last hidden state to match student bottleneck (H/16)
+                    # teacher_feat = F.interpolate(
+                    #     teacher_out.hidden_states[-1],
+                    #     size=student_bottleneck.shape[2:],
+                    #     mode="bilinear", align_corners=False,
+                    # )
 
                 ohem_loss  = ohem_criterion(outputs, labels)
                 dice_loss  = dice_criterion(outputs, labels)
                 focal_loss = focal_criterion(outputs, labels)
-                kd_loss    = logit_kd_loss(outputs, teacher_logits, labels, args.temperature)
-                feat_loss  = feature_kd_loss(feat_projector(student_bottleneck.float()),
-                                             teacher_feat.float())
+                # kd_loss    = logit_kd_loss(outputs, teacher_logits, labels, args.temperature)
+                # feat_loss  = feature_kd_loss(feat_projector(student_bottleneck.float()),
+                #                              teacher_feat.float())
 
                 loss = (
                     args.ce_weight      * ohem_loss
                     + args.dice_weight  * dice_loss
                     + args.focal_weight * focal_loss
-                    + args.kd_logit_weight * kd_loss
-                    + args.kd_feat_weight  * feat_loss
+                    # + args.kd_logit_weight * kd_loss
+                    # + args.kd_feat_weight  * feat_loss
                 )
 
             (loss / args.accumulation_steps).backward()
@@ -331,8 +331,8 @@ def main(args):
                         "train/ohem":          args.ce_weight * ohem_loss.item(),
                         "train/dice":          args.dice_weight * dice_loss.item(),
                         "train/focal":         args.focal_weight * focal_loss.item(),
-                        "train/kd_logit":      args.kd_logit_weight * kd_loss.item(),
-                        "train/kd_feat":       args.kd_feat_weight * feat_loss.item(),
+                        # "train/kd_logit":      args.kd_logit_weight * kd_loss.item(),
+                        # "train/kd_feat":       args.kd_feat_weight * feat_loss.item(),
                         "train/lr":            optimizer.param_groups[1]["lr"],
                         "epoch":               epoch + 1,
                     },

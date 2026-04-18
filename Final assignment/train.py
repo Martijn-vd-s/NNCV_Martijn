@@ -104,14 +104,14 @@ def main(args):
 
     img_transform = Compose([
         ToImage(),
-        Resize((512, 1024)),
+        Resize((1024, 1024)),
         ToDtype(torch.float32, scale=True),
         Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
     ])
 
     target_transform = Compose([
         ToImage(),
-        Resize((512, 1024), interpolation=InterpolationMode.NEAREST),
+        Resize((1024, 1024), interpolation=InterpolationMode.NEAREST),
         ToDtype(torch.int64),
     ])
 

@@ -31,11 +31,15 @@ class SamResize:
         Expects a torch tensor with shape HxWxC in float format.
         """
 
-        target_size = self.get_preprocess_shape(image.shape[0], image.shape[1], self.size)
+        target_size = self.get_preprocess_shape(
+            image.shape[0], image.shape[1], self.size
+        )
         return resize(image.permute(2, 0, 1), target_size)
 
     @staticmethod
-    def get_preprocess_shape(oldh: int, oldw: int, long_side_length: int) -> tuple[int, int]:
+    def get_preprocess_shape(
+        oldh: int, oldw: int, long_side_length: int
+    ) -> tuple[int, int]:
         """
         Compute the output size given input size and target long side length.
         """
@@ -62,17 +66,31 @@ def show_mask(mask, ax, random_color=False):
 def show_box(box, ax):
     x0, y0 = box[0], box[1]
     w, h = box[2] - box[0], box[3] - box[1]
-    ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor="green", facecolor=(0, 0, 0, 0), lw=2))
+    ax.add_patch(
+        plt.Rectangle((x0, y0), w, h, edgecolor="green", facecolor=(0, 0, 0, 0), lw=2)
+    )
 
 
 def show_points(coords, labels, ax, marker_size=375):
     pos_points = coords[labels == 1]
     neg_points = coords[labels == 0]
     ax.scatter(
-        pos_points[:, 0], pos_points[:, 1], color="green", marker="*", s=marker_size, edgecolor="white", linewidth=1.25
+        pos_points[:, 0],
+        pos_points[:, 1],
+        color="green",
+        marker="*",
+        s=marker_size,
+        edgecolor="white",
+        linewidth=1.25,
     )
     ax.scatter(
-        neg_points[:, 0], neg_points[:, 1], color="red", marker="*", s=marker_size, edgecolor="white", linewidth=1.25
+        neg_points[:, 0],
+        neg_points[:, 1],
+        color="red",
+        marker="*",
+        s=marker_size,
+        edgecolor="white",
+        linewidth=1.25,
     )
 
 
@@ -93,7 +111,9 @@ def preprocess(x, img_size, device):
     return x
 
 
-def resize_longest_image_size(input_image_size: torch.Tensor, longest_side: int) -> torch.Tensor:
+def resize_longest_image_size(
+    input_image_size: torch.Tensor, longest_side: int
+) -> torch.Tensor:
     input_image_size = input_image_size.to(torch.float32)
     scale = longest_side / torch.max(input_image_size)
     transformed_size = scale * input_image_size
@@ -101,7 +121,9 @@ def resize_longest_image_size(input_image_size: torch.Tensor, longest_side: int)
     return transformed_size
 
 
-def mask_postprocessing(masks: torch.Tensor, orig_im_size: torch.Tensor) -> torch.Tensor:
+def mask_postprocessing(
+    masks: torch.Tensor, orig_im_size: torch.Tensor
+) -> torch.Tensor:
     img_size = 1024
     masks = torch.tensor(masks)
     orig_im_size = torch.tensor(orig_im_size)
@@ -152,7 +174,9 @@ if __name__ == "__main__":
     parser.add_argument("--encoder_engine", type=str, required=True, help="TRT engine.")
     parser.add_argument("--decoder_engine", type=str, required=True, help="TRT engine.")
     parser.add_argument("--img_path", type=str, default="assets/fig/cat.jpg")
-    parser.add_argument("--out_path", type=str, default=".demo/efficientvit_sam_demo_tensorrt.png")
+    parser.add_argument(
+        "--out_path", type=str, default=".demo/efficientvit_sam_demo_tensorrt.png"
+    )
     parser.add_argument("--mode", type=str, default="point", choices=["point", "boxes"])
     parser.add_argument("--point", type=str, default=None)
     parser.add_argument("--boxes", type=str, default=None)
@@ -164,7 +188,9 @@ if __name__ == "__main__":
         with open(args.encoder_engine, "rb") as f:
             engine_bytes = f.read()
         engine = runtime.deserialize_cuda_engine(engine_bytes)
-    trt_encoder = TRTModule(engine, input_names=["input_image"], output_names=["image_embeddings"])
+    trt_encoder = TRTModule(
+        engine, input_names=["input_image"], output_names=["image_embeddings"]
+    )
 
     with trt.Logger() as logger, trt.Runtime(logger) as runtime:
         with open(args.decoder_engine, "rb") as f:
@@ -179,7 +205,11 @@ if __name__ == "__main__":
     raw_img = cv2.cvtColor(cv2.imread(args.img_path), cv2.COLOR_BGR2RGB)
     origin_image_size = raw_img.shape[:2]
 
-    if args.model in ["efficientvit-sam-l0", "efficientvit-sam-l1", "efficientvit-sam-l2"]:
+    if args.model in [
+        "efficientvit-sam-l0",
+        "efficientvit-sam-l1",
+        "efficientvit-sam-l2",
+    ]:
         img = preprocess(raw_img, img_size=512, device="cuda")
     elif args.model in ["efficientvit-sam-xl0", "efficientvit-sam-xl1"]:
         img = preprocess(raw_img, img_size=1024, device="cuda")
@@ -194,15 +224,24 @@ if __name__ == "__main__":
     if args.mode == "point":
         H, W, _ = raw_img.shape
         point = np.array(
-            yaml.safe_load(f"[[[{W // 2}, {H // 2}, {1}]]]" if args.point is None else args.point), dtype=np.float32
+            yaml.safe_load(
+                f"[[[{W // 2}, {H // 2}, {1}]]]" if args.point is None else args.point
+            ),
+            dtype=np.float32,
         )
         point_coords = point[..., :2]
         point_labels = point[..., 2]
         orig_point_coords = deepcopy(point_coords)
         orig_point_labels = deepcopy(point_labels)
-        point_coords = apply_coords(point_coords, origin_image_size, input_size).astype(np.float32)
+        point_coords = apply_coords(point_coords, origin_image_size, input_size).astype(
+            np.float32
+        )
 
-        inputs = (image_embedding, torch.from_numpy(point_coords).to("cuda"), torch.from_numpy(point_labels).to("cuda"))
+        inputs = (
+            image_embedding,
+            torch.from_numpy(point_coords).to("cuda"),
+            torch.from_numpy(point_labels).to("cuda"),
+        )
         assert all([x.dtype == torch.float32 for x in inputs])
 
         low_res_masks, _ = trt_decoder(*inputs)
@@ -225,11 +264,17 @@ if __name__ == "__main__":
         orig_boxes = deepcopy(boxes)
 
         boxes = apply_boxes(boxes, origin_image_size, input_size).astype(np.float32)
-        box_label = np.array([[2, 3] for _ in range(boxes.shape[0])], dtype=np.float32).reshape((-1, 2))
+        box_label = np.array(
+            [[2, 3] for _ in range(boxes.shape[0])], dtype=np.float32
+        ).reshape((-1, 2))
         point_coords = boxes
         point_labels = box_label
 
-        inputs = (image_embedding, torch.from_numpy(point_coords).to("cuda"), torch.from_numpy(point_labels).to("cuda"))
+        inputs = (
+            image_embedding,
+            torch.from_numpy(point_coords).to("cuda"),
+            torch.from_numpy(point_labels).to("cuda"),
+        )
         assert all([x.dtype == torch.float32 for x in inputs])
 
         low_res_masks, _ = trt_decoder(*inputs)

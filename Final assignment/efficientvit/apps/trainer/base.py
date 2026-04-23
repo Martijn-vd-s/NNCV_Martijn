@@ -138,7 +138,9 @@ class Trainer:
         network = self.network if network is None else network
         if data_loader is None:
             data_loader = []
-            for data in self.data_provider.build_sub_train_loader(subset_size, subset_batch_size):
+            for data in self.data_provider.build_sub_train_loader(
+                subset_size, subset_batch_size
+            ):
                 if isinstance(data, list):
                     data_loader.append(data[0])
                 elif isinstance(data, dict):
@@ -159,7 +161,9 @@ class Trainer:
     def _validate(self, model, data_loader, epoch) -> dict[str, Any]:
         raise NotImplementedError
 
-    def validate(self, model=None, data_loader=None, is_test=True, epoch=0) -> dict[str, Any]:
+    def validate(
+        self, model=None, data_loader=None, is_test=True, epoch=0
+    ) -> dict[str, Any]:
         model = self.eval_network if model is None else model
         if data_loader is None:
             if is_test:
@@ -178,8 +182,16 @@ class Trainer:
         epoch=0,
         eval_image_size=None,
     ) -> dict[str, dict[str, Any]]:
-        eval_image_size = self.run_config.eval_image_size if eval_image_size is None else eval_image_size
-        eval_image_size = self.data_provider.image_size if eval_image_size is None else eval_image_size
+        eval_image_size = (
+            self.run_config.eval_image_size
+            if eval_image_size is None
+            else eval_image_size
+        )
+        eval_image_size = (
+            self.data_provider.image_size
+            if eval_image_size is None
+            else eval_image_size
+        )
         model = self.eval_network if model is None else model
 
         if not isinstance(eval_image_size, list):
@@ -200,7 +212,9 @@ class Trainer:
 
     """ training """
 
-    def prep_for_training(self, run_config: RunConfig, ema_decay: Optional[float] = None, amp="fp32") -> None:
+    def prep_for_training(
+        self, run_config: RunConfig, ema_decay: Optional[float] = None, amp="fp32"
+    ) -> None:
         self.run_config = run_config
         self.model = nn.parallel.DistributedDataParallel(
             self.model.cuda(),
@@ -239,7 +253,11 @@ class Trainer:
         print("Sync model")
         self.save_model(model_name="sync.pt")
         dist_barrier()
-        checkpoint = torch.load(os.path.join(self.checkpoint_path, "sync.pt"), map_location="cpu", weights_only=True)
+        checkpoint = torch.load(
+            os.path.join(self.checkpoint_path, "sync.pt"),
+            map_location="cpu",
+            weights_only=True,
+        )
         dist_barrier()
         if is_master():
             os.remove(os.path.join(self.checkpoint_path, "sync.pt"))
@@ -269,7 +287,9 @@ class Trainer:
         self.scaler.unscale_(self.optimizer)
         # gradient clip
         if self.run_config.grad_clip is not None:
-            torch.nn.utils.clip_grad_value_(self.model.parameters(), self.run_config.grad_clip)
+            torch.nn.utils.clip_grad_value_(
+                self.model.parameters(), self.run_config.grad_clip
+            )
         # update
         self.scaler.step(self.optimizer)
         self.scaler.update()

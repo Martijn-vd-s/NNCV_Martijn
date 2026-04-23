@@ -6,7 +6,9 @@ __all__ = ["OneEuroFilter", "GazeSmoother", "LandmarkSmoother"]
 
 
 class OneEuroFilter:
-    def __init__(self, t0=-1.0, x0=0.0, dx0=0.0, min_cutoff=1.0, beta=0.01, d_cutoff=1.0):
+    def __init__(
+        self, t0=-1.0, x0=0.0, dx0=0.0, min_cutoff=1.0, beta=0.01, d_cutoff=1.0
+    ):
         """Initialize the one euro filter."""
         # The parameters.
         self.min_cutoff = float(min_cutoff)
@@ -56,7 +58,9 @@ class GazeSmoother:
         self.pitch_smoother = filter(**kwargs)
 
     def __call__(self, yawpitch, **kwargs):
-        return self.yaw_smoother(yawpitch[0], **kwargs), self.pitch_smoother(yawpitch[1], **kwargs)
+        return self.yaw_smoother(yawpitch[0], **kwargs), self.pitch_smoother(
+            yawpitch[1], **kwargs
+        )
 
 
 class LandmarkSmoother:

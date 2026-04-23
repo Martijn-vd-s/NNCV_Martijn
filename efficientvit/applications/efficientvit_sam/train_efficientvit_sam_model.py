@@ -37,7 +37,9 @@ def main():
 
     setup.save_exp_config(config, args.path)
 
-    data_provider = setup.setup_data_provider(config, [SAMDataProvider], is_distributed=True)
+    data_provider = setup.setup_data_provider(
+        config, [SAMDataProvider], is_distributed=True
+    )
 
     run_config = setup.setup_run_config(config, SAMRunConfig)
 
@@ -60,7 +62,9 @@ def main():
 
     if args.resume:
         trainer.load_model()
-        trainer.data_provider = setup.setup_data_provider(config, [SAMDataProvider], is_distributed=True)
+        trainer.data_provider = setup.setup_data_provider(
+            config, [SAMDataProvider], is_distributed=True
+        )
     else:
         trainer.sync_model()
 

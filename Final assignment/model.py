@@ -7,18 +7,30 @@ import os
 # sys.path.insert(0, "/opt")
 # from efficientvit.applications.dc_ae.dc_ae_generate_latent import BASE_DIR
 from efficientvit.models.efficientvit import efficientvit_backbone_b0
+
+
 class DepthwiseSeparableConv(nn.Module):
     def __init__(self, in_channels, out_channels, stride=1):
         super().__init__()
         self.dw = nn.Sequential(
-            nn.Conv2d(in_channels, in_channels, 3, stride=stride,
-                      padding=1, groups=in_channels, bias=False),
-            nn.BatchNorm2d(in_channels), nn.ReLU6(inplace=True),
+            nn.Conv2d(
+                in_channels,
+                in_channels,
+                3,
+                stride=stride,
+                padding=1,
+                groups=in_channels,
+                bias=False,
+            ),
+            nn.BatchNorm2d(in_channels),
+            nn.ReLU6(inplace=True),
         )
         self.pw = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, 1, bias=False),
-            nn.BatchNorm2d(out_channels), nn.ReLU6(inplace=True),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU6(inplace=True),
         )
+
     def forward(self, x):
         return self.pw(self.dw(x))
 
@@ -33,6 +45,7 @@ class SEBlock(nn.Module):
             nn.Linear(max(1, channels // reduction), channels, bias=False),
             nn.Sigmoid(),
         )
+
     def forward(self, x):
         b, c, _, _ = x.size()
         y = self.pool(x).view(b, c)
@@ -45,43 +58,64 @@ class DAPPM(nn.Module):
     Much cheaper than ASPP: uses avg-pool at 4 scales + cascaded fusion.
     https://arxiv.org/abs/2101.06085
     """
+
     def __init__(self, in_ch, branch_ch, out_ch):
         super().__init__()
-        self.scales = nn.ModuleList([
-            nn.Sequential(nn.AdaptiveAvgPool2d(1),
-                          nn.Conv2d(in_ch, branch_ch, 1, bias=False),
-                          nn.BatchNorm2d(branch_ch), nn.ReLU(inplace=True)),
-            nn.Sequential(nn.AvgPool2d(5, 1, 2),
-                          nn.Conv2d(in_ch, branch_ch, 1, bias=False),
-                          nn.BatchNorm2d(branch_ch), nn.ReLU(inplace=True)),
-            nn.Sequential(nn.AvgPool2d(9, 1, 4),
-                          nn.Conv2d(in_ch, branch_ch, 1, bias=False),
-                          nn.BatchNorm2d(branch_ch), nn.ReLU(inplace=True)),
-            # nn.Sequential(nn.AvgPool2d(17, 1, 8),
-            #               nn.Conv2d(in_ch, branch_ch, 1, bias=False),
-            #               nn.BatchNorm2d(branch_ch), nn.ReLU(inplace=True)),
-        ])
+        self.scales = nn.ModuleList(
+            [
+                nn.Sequential(
+                    nn.AdaptiveAvgPool2d(1),
+                    nn.Conv2d(in_ch, branch_ch, 1, bias=False),
+                    nn.BatchNorm2d(branch_ch),
+                    nn.ReLU(inplace=True),
+                ),
+                nn.Sequential(
+                    nn.AvgPool2d(5, 1, 2),
+                    nn.Conv2d(in_ch, branch_ch, 1, bias=False),
+                    nn.BatchNorm2d(branch_ch),
+                    nn.ReLU(inplace=True),
+                ),
+                nn.Sequential(
+                    nn.AvgPool2d(9, 1, 4),
+                    nn.Conv2d(in_ch, branch_ch, 1, bias=False),
+                    nn.BatchNorm2d(branch_ch),
+                    nn.ReLU(inplace=True),
+                ),
+                # nn.Sequential(nn.AvgPool2d(17, 1, 8),
+                #               nn.Conv2d(in_ch, branch_ch, 1, bias=False),
+                #               nn.BatchNorm2d(branch_ch), nn.ReLU(inplace=True)),
+            ]
+        )
         # identity branch
         self.identity = nn.Sequential(
             nn.Conv2d(in_ch, branch_ch, 1, bias=False),
-            nn.BatchNorm2d(branch_ch), nn.ReLU(inplace=True)
+            nn.BatchNorm2d(branch_ch),
+            nn.ReLU(inplace=True),
         )
         # cascaded fusion convs
-        self.fuse = nn.ModuleList([
-            nn.Sequential(nn.Conv2d(branch_ch, branch_ch, 3, padding=1, bias=False),
-                          nn.BatchNorm2d(branch_ch), nn.ReLU(inplace=True))
-            for _ in range(len(self.scales))
-        ])
+        self.fuse = nn.ModuleList(
+            [
+                nn.Sequential(
+                    nn.Conv2d(branch_ch, branch_ch, 3, padding=1, bias=False),
+                    nn.BatchNorm2d(branch_ch),
+                    nn.ReLU(inplace=True),
+                )
+                for _ in range(len(self.scales))
+            ]
+        )
         self.project = nn.Sequential(
             nn.Conv2d(branch_ch * (len(self.scales) + 1), out_ch, 1, bias=False),
-            nn.BatchNorm2d(out_ch), nn.ReLU(inplace=True),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(inplace=True),
         )
 
     def forward(self, x):
         H, W = x.shape[2:]
         branches = [self.identity(x)]
         for scale, fuse in zip(self.scales, self.fuse):
-            s = F.interpolate(scale(x), size=(H, W), mode='bilinear', align_corners=False)
+            s = F.interpolate(
+                scale(x), size=(H, W), mode="bilinear", align_corners=False
+            )
             branches.append(fuse(s + branches[-1]))  # cascaded residual fusion
         return self.project(torch.cat(branches, dim=1))
 
@@ -92,7 +126,7 @@ class Up(nn.Module):
         self.conv = DepthwiseSeparableConv(in_channels, out_channels)
 
     def forward(self, x1, x2):
-        x1 = F.interpolate(x1, size=x2.shape[2:], mode='bilinear', align_corners=False)
+        x1 = F.interpolate(x1, size=x2.shape[2:], mode="bilinear", align_corners=False)
         return self.conv(torch.cat([x2, x1], dim=1))
 
 
@@ -100,13 +134,14 @@ class OutConv(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.conv = nn.Conv2d(in_channels, out_channels, 1)
+
     def forward(self, x):
         return self.conv(x)
 
 
 class Model(nn.Module):
     """
-    Efficient U-Net with EfficientViT-B0 encoder, https://github.com/CVHub520/efficientvit?tab=readme-ov-file 
+    Efficient U-Net with EfficientViT-B0 encoder, https://github.com/CVHub520/efficientvit?tab=readme-ov-file
     DAPPM bottleneck, lightweight decoder.
 
     Key refs:
@@ -114,6 +149,7 @@ class Model(nn.Module):
       - EfficientViT: Cai et al. (2023) https://arxiv.org/abs/2205.14756
       - MobileNetV3: Howard et al. (2019) https://arxiv.org/abs/1905.02244
     """
+
     def __init__(self, in_channels=3, n_classes=19, dino_fine_tune=False):
         super().__init__()
         self.in_channels = in_channels
@@ -123,23 +159,25 @@ class Model(nn.Module):
 
         weights_path = os.path.join(BASE_DIR, "b0.pt")
         if os.path.exists(weights_path):
-            # 1. Load the checkpoint
+            # Load the checkpoint
             checkpoint = torch.load(weights_path, map_location="cpu", weights_only=True)
-            
-            # 2. Extract the state_dict
-            state_dict = checkpoint.get('state_dict', checkpoint)
-            
-            # 3. Filter and rename keys specifically for the backbone
+
+            # Extract the state_dict
+            state_dict = checkpoint.get("state_dict", checkpoint)
+
+            # Filter and rename keys specifically for the backbone
             backbone_weights = {}
             for key, value in state_dict.items():
-                if key.startswith('backbone.'):
+                if key.startswith("backbone."):
                     # Remove the 'backbone.' prefix (length of 9)
-                    new_key = key[9:] 
+                    new_key = key[9:]
                     backbone_weights[new_key] = value
 
-            # 4. Load the cleaned weights into self.backbone
-            missing, unexpected = self.backbone.load_state_dict(backbone_weights, strict=False)
-            
+            # Load the cleaned weights into self.backbone
+            missing, unexpected = self.backbone.load_state_dict(
+                backbone_weights, strict=False
+            )
+
             print("[Model] loaded EfficientViT-B0 from", weights_path)
             print("[Model] missing keys:", missing)
             print("[Model] unexpected keys:", unexpected)
@@ -148,7 +186,8 @@ class Model(nn.Module):
 
         self.reduce = nn.Sequential(
             nn.Conv2d(128, 48, 1, bias=False),
-            nn.BatchNorm2d(48), nn.ReLU(inplace=True),
+            nn.BatchNorm2d(48),
+            nn.ReLU(inplace=True),
         )
         self.dappm = DAPPM(48, 24, 48)
 
@@ -157,7 +196,7 @@ class Model(nn.Module):
         self.up3 = Up(32 + 32, 24)
 
         self.dropout = nn.Dropout2d(p=0.1)
-        self.outc    = OutConv(32, n_classes)
+        self.outc = OutConv(32, n_classes)
 
     def forward(self, x):
         if x.shape[1] != self.in_channels:
@@ -176,8 +215,9 @@ class Model(nn.Module):
         x = self.up2(x, x2)
         # x = self.up3(x, feats["stage1"])
 
-        x = F.interpolate(x, size=(H, W), mode='bilinear', align_corners=False)
+        x = F.interpolate(x, size=(H, W), mode="bilinear", align_corners=False)
         return self.outc(self.dropout(x))
+
 
 if __name__ == "__main__":
     # BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -187,4 +227,3 @@ if __name__ == "__main__":
     # print(ckpt.keys() if isinstance(ckpt, dict) else "not a dict")
 
     model = Model()
-

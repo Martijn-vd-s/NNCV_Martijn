@@ -14,7 +14,10 @@ from segment_anything.utils.amg import build_all_layer_point_grids
 from segment_anything.utils.transforms import ResizeLongestSide
 from torchvision.transforms.functional import resize, to_pil_image
 
-from efficientvit.models.efficientvit.backbone import EfficientViTBackbone, EfficientViTLargeBackbone
+from efficientvit.models.efficientvit.backbone import (
+    EfficientViTBackbone,
+    EfficientViTLargeBackbone,
+)
 from efficientvit.models.nn import (
     ConvLayer,
     DAGBlock,
@@ -81,11 +84,15 @@ class SamResize:
         """
         Expects a numpy array with shape HxWxC in uint8 format.
         """
-        target_size = self.get_preprocess_shape(image.shape[0], image.shape[1], self.size)
+        target_size = self.get_preprocess_shape(
+            image.shape[0], image.shape[1], self.size
+        )
         return np.array(resize(to_pil_image(image), target_size))
 
     @staticmethod
-    def get_preprocess_shape(oldh: int, oldw: int, long_side_length: int) -> tuple[int, int]:
+    def get_preprocess_shape(
+        oldh: int, oldw: int, long_side_length: int
+    ) -> tuple[int, int]:
         """
         Compute the output size given input size and target long side length.
         """
@@ -167,11 +174,15 @@ class SamNeck(DAGBlock):
             )
         }
 
-        super(SamNeck, self).__init__(inputs, "add", None, middle=middle, outputs=outputs)
+        super(SamNeck, self).__init__(
+            inputs, "add", None, middle=middle, outputs=outputs
+        )
 
 
 class EfficientViTSamImageEncoder(nn.Module):
-    def __init__(self, backbone: EfficientViTBackbone | EfficientViTLargeBackbone, neck: SamNeck):
+    def __init__(
+        self, backbone: EfficientViTBackbone | EfficientViTLargeBackbone, neck: SamNeck
+    ):
         super().__init__()
         self.backbone = backbone
         self.neck = neck
@@ -230,7 +241,9 @@ class EfficientViTSam(nn.Module):
             align_corners=False,
         )
         masks = masks[..., : input_size[0], : input_size[1]]
-        masks = F.interpolate(masks, original_size, mode="bilinear", align_corners=False)
+        masks = F.interpolate(
+            masks, original_size, mode="bilinear", align_corners=False
+        )
         return masks
 
     def forward(
@@ -329,7 +342,9 @@ class EfficientViTSamPredictor:
             *self.original_size, long_side_length=self.model.image_size[0]
         )
 
-        torch_data = self.model.transform(image).unsqueeze(dim=0).to(get_device(self.model))
+        torch_data = (
+            self.model.transform(image).unsqueeze(dim=0).to(get_device(self.model))
+        )
         self.features = self.model.image_encoder(torch_data)
         self.is_image_set = True
 
@@ -391,15 +406,21 @@ class EfficientViTSamPredictor:
             a subsequent iteration as mask input.
         """
         if not self.is_image_set:
-            raise RuntimeError("An image must be set with .set_image(...) before mask prediction.")
+            raise RuntimeError(
+                "An image must be set with .set_image(...) before mask prediction."
+            )
 
         device = get_device(self.model)
         # Transform input prompts
         coords_torch, labels_torch, box_torch, mask_input_torch = None, None, None, None
         if point_coords is not None:
-            assert point_labels is not None, "point_labels must be supplied if point_coords is supplied."
+            assert point_labels is not None, (
+                "point_labels must be supplied if point_coords is supplied."
+            )
             point_coords = self.apply_coords(point_coords)
-            coords_torch = torch.as_tensor(point_coords, dtype=torch.float, device=device)
+            coords_torch = torch.as_tensor(
+                point_coords, dtype=torch.float, device=device
+            )
             labels_torch = torch.as_tensor(point_labels, dtype=torch.int, device=device)
             coords_torch, labels_torch = coords_torch[None, :, :], labels_torch[None, :]
         if box is not None:
@@ -407,7 +428,9 @@ class EfficientViTSamPredictor:
             box_torch = torch.as_tensor(box, dtype=torch.float, device=device)
             box_torch = box_torch[None, :]
         if mask_input is not None:
-            mask_input_torch = torch.as_tensor(mask_input, dtype=torch.float, device=device)
+            mask_input_torch = torch.as_tensor(
+                mask_input, dtype=torch.float, device=device
+            )
             mask_input_torch = mask_input_torch[None, :, :, :]
 
         masks, iou_predictions, low_res_masks = self.predict_torch(
@@ -470,7 +493,9 @@ class EfficientViTSamPredictor:
             a subsequent iteration as mask input.
         """
         if not self.is_image_set:
-            raise RuntimeError("An image must be set with .set_image(...) before mask prediction.")
+            raise RuntimeError(
+                "An image must be set with .set_image(...) before mask prediction."
+            )
         if point_coords is not None:
             points = (point_coords, point_labels)
         else:
@@ -495,7 +520,9 @@ class EfficientViTSamPredictor:
             multimask_output=multimask_output,
         )
         # Upscale the masks to the original image resolution
-        masks = self.model.postprocess_masks(low_res_masks, self.input_size, self.original_size)
+        masks = self.model.postprocess_masks(
+            low_res_masks, self.input_size, self.original_size
+        )
         if not return_logits:
             masks = masks > self.model.mask_threshold
         return masks, iou_predictions, low_res_masks
@@ -519,9 +546,9 @@ class EfficientViTSamAutomaticMaskGenerator(SamAutomaticMaskGenerator):
         min_mask_region_area: int = 0,
         output_mode: str = "binary_mask",
     ) -> None:
-        assert (points_per_side is None) != (
-            point_grids is None
-        ), "Exactly one of points_per_side or point_grid must be provided."
+        assert (points_per_side is None) != (point_grids is None), (
+            "Exactly one of points_per_side or point_grid must be provided."
+        )
         if points_per_side is not None:
             self.point_grids = build_all_layer_point_grids(
                 points_per_side,
@@ -553,7 +580,9 @@ class EfficientViTSamAutomaticMaskGenerator(SamAutomaticMaskGenerator):
         self.output_mode = output_mode
 
 
-def build_efficientvit_sam(image_encoder: EfficientViTSamImageEncoder, image_size: int) -> EfficientViTSam:
+def build_efficientvit_sam(
+    image_encoder: EfficientViTSamImageEncoder, image_size: int
+) -> EfficientViTSam:
     return EfficientViTSam(
         image_encoder=image_encoder,
         prompt_encoder=PromptEncoder(

@@ -17,7 +17,12 @@ def init_modules(model: nn.Module | list[nn.Module], init_type="trunc_normal") -
 
         if init_type.startswith("trunc_normal"):
             init_func = lambda param: nn.init.trunc_normal_(
-                param, std=(_DEFAULT_INIT_PARAM["trunc_normal"] if init_params is None else init_params)
+                param,
+                std=(
+                    _DEFAULT_INIT_PARAM["trunc_normal"]
+                    if init_params is None
+                    else init_params
+                ),
             )
         else:
             raise NotImplementedError
@@ -45,7 +50,9 @@ def zero_last_gamma(model: nn.Module, init_val=0) -> None:
     import efficientvit.models.nn.ops as ops
 
     for m in model.modules():
-        if isinstance(m, ops.ResidualBlock) and isinstance(m.shortcut, ops.IdentityLayer):
+        if isinstance(m, ops.ResidualBlock) and isinstance(
+            m.shortcut, ops.IdentityLayer
+        ):
             if isinstance(m.main, (ops.DSConv, ops.MBConv, ops.FusedMBConv)):
                 parent_module = m.main.point_conv
             elif isinstance(m.main, ops.ResBlock):

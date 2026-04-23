@@ -10,12 +10,18 @@ import torch
 import torch.nn as nn
 from omegaconf import MISSING
 from torch.utils.data import DataLoader
-from torchmetrics.image import LearnedPerceptualImagePatchSimilarity, StructuralSimilarityIndexMeasure
+from torchmetrics.image import (
+    LearnedPerceptualImagePatchSimilarity,
+    StructuralSimilarityIndexMeasure,
+)
 from torchvision.utils import save_image
 from tqdm import tqdm
 
 from efficientvit.ae_model_zoo import DCAE_HF
-from efficientvit.aecore.data_provider.imagenet import ImageNetDataProvider, ImageNetDataProviderConfig
+from efficientvit.aecore.data_provider.imagenet import (
+    ImageNetDataProvider,
+    ImageNetDataProviderConfig,
+)
 from efficientvit.apps.metrics.fid.fid import FIDStats, FIDStatsConfig
 from efficientvit.apps.metrics.psnr.psnr import PSNRStats, PSNRStatsConfig
 from efficientvit.apps.utils.dist import (
@@ -93,7 +99,9 @@ class Evaluator:
 
         if is_dist_initialized():
             self.model = nn.parallel.DistributedDataParallel(
-                model.cuda(), device_ids=[get_dist_local_rank()], find_unused_parameters=True
+                model.cuda(),
+                device_ids=[get_dist_local_rank()],
+                find_unused_parameters=True,
             )
             self.rank = get_dist_rank()
         else:
@@ -133,7 +141,11 @@ class Evaluator:
 
     @torch.no_grad
     def evaluate_single_dataloader(
-        self, dataloader: DataLoader, step: int, f_log=sys.stdout, additional_dir_name: str = ""
+        self,
+        dataloader: DataLoader,
+        step: int,
+        f_log=sys.stdout,
+        additional_dir_name: str = "",
     ) -> dict[str, Any]:
         self.model.eval()
         valid_loss = AverageMeter(is_distributed=is_dist_initialized())
@@ -150,9 +162,13 @@ class Evaluator:
             lpips = LearnedPerceptualImagePatchSimilarity(normalize=True).to(device)
 
         if self.cfg.evaluate_dir_name is not None:
-            evaluate_dir = os.path.join(self.cfg.run_dir, self.cfg.evaluate_dir_name, additional_dir_name)
+            evaluate_dir = os.path.join(
+                self.cfg.run_dir, self.cfg.evaluate_dir_name, additional_dir_name
+            )
         else:
-            evaluate_dir = os.path.join(self.cfg.run_dir, f"{step}", additional_dir_name)
+            evaluate_dir = os.path.join(
+                self.cfg.run_dir, f"{step}", additional_dir_name
+            )
         if is_master():
             os.makedirs(evaluate_dir, exist_ok=True)
         if is_dist_initialized():
@@ -175,18 +191,27 @@ class Evaluator:
                 # forward
                 output_dict = self.run_step(images)
                 if (
-                    num_saved_images < self.cfg.num_save_images and (is_master() or self.cfg.save_images_at_all_procs)
+                    num_saved_images < self.cfg.num_save_images
+                    and (is_master() or self.cfg.save_images_at_all_procs)
                 ) or self.cfg.save_all_images:
                     device = images.device
                     input_images = images * 0.5 + 0.5
                     output_images = output_dict["output"] * 0.5 + 0.5
                     for j in range(input_images.shape[0]):
                         save_image(
-                            torch.cat([input_images[j : j + 1], output_images[j : j + 1]], dim=3),
-                            os.path.join(evaluate_dir, f"{self.rank}_{num_saved_images}.png"),
+                            torch.cat(
+                                [input_images[j : j + 1], output_images[j : j + 1]],
+                                dim=3,
+                            ),
+                            os.path.join(
+                                evaluate_dir, f"{self.rank}_{num_saved_images}.png"
+                            ),
                         )
                         num_saved_images += 1
-                        if num_saved_images >= self.cfg.num_save_images and not self.cfg.save_all_images:
+                        if (
+                            num_saved_images >= self.cfg.num_save_images
+                            and not self.cfg.save_all_images
+                        ):
                             break
                     del input_images, output_images
                 # update metrics
@@ -195,8 +220,14 @@ class Evaluator:
                     device = output_dict["output"].device
                     output_images = output_dict["output"] * 0.5 + 0.5
                     fid_stats.add_data(output_images)
-                images_ref_uint8 = (255 * ((images + 1) / 2) + 0.5).clamp(0, 255).to(torch.uint8)
-                images_pred_uint8 = (255 * ((output_dict["output"] + 1) / 2) + 0.5).clamp(0, 255).to(torch.uint8)
+                images_ref_uint8 = (
+                    (255 * ((images + 1) / 2) + 0.5).clamp(0, 255).to(torch.uint8)
+                )
+                images_pred_uint8 = (
+                    (255 * ((output_dict["output"] + 1) / 2) + 0.5)
+                    .clamp(0, 255)
+                    .to(torch.uint8)
+                )
                 if self.cfg.compute_psnr:
                     psnr.add_data(images_ref_uint8, images_pred_uint8)
                 if self.cfg.compute_ssim:

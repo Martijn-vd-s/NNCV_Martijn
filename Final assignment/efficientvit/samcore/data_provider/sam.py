@@ -52,19 +52,31 @@ class OnlineDataset(Dataset):
 
         if self.train:
             if len(annotations) > self.num_masks:
-                r = np.random.choice(len(annotations), size=self.num_masks, replace=False)
+                r = np.random.choice(
+                    len(annotations), size=self.num_masks, replace=False
+                )
             else:
-                repeat, residue = self.num_masks // len(annotations), self.num_masks % len(annotations)
+                repeat, residue = (
+                    self.num_masks // len(annotations),
+                    self.num_masks % len(annotations),
+                )
                 r = np.random.choice(len(annotations), size=residue, replace=False)
-                r = np.concatenate([np.arange(len(annotations)) for _ in range(repeat)] + [r], axis=0)
+                r = np.concatenate(
+                    [np.arange(len(annotations)) for _ in range(repeat)] + [r], axis=0
+                )
 
         else:
             if len(annotations) > self.num_masks:
                 r = np.arange(self.num_masks)
             else:
-                repeat, residue = self.num_masks // len(annotations), self.num_masks % len(annotations)
+                repeat, residue = (
+                    self.num_masks // len(annotations),
+                    self.num_masks % len(annotations),
+                )
                 r = np.arange(residue)
-                r = np.concatenate([np.arange(len(annotations)) for _ in range(repeat)] + [r], axis=0)
+                r = np.concatenate(
+                    [np.arange(len(annotations)) for _ in range(repeat)] + [r], axis=0
+                )
 
         masks = np.stack([mask_utils.decode(annotations[i]["segmentation"]) for i in r])
         points = np.stack([annotations[i]["point_coords"][0] for i in r])
@@ -145,24 +157,52 @@ class SAMDataProvider(DataProvider):
         train_transform = self.build_train_transform()
         valid_transform = self.build_valid_transform()
 
-        train_dataset = OnlineDataset(root=self.root, train=True, num_masks=self.num_masks, transform=train_transform)
+        train_dataset = OnlineDataset(
+            root=self.root,
+            train=True,
+            num_masks=self.num_masks,
+            transform=train_transform,
+        )
 
-        val_dataset = OnlineDataset(root=self.root, train=False, num_masks=2, transform=valid_transform)
+        val_dataset = OnlineDataset(
+            root=self.root, train=False, num_masks=2, transform=valid_transform
+        )
 
         test_dataset = None
 
         return train_dataset, val_dataset, test_dataset
 
-    def build_dataloader(self, dataset: Optional[Any], batch_size: int, n_worker: int, drop_last: bool, train: bool):
+    def build_dataloader(
+        self,
+        dataset: Optional[Any],
+        batch_size: int,
+        n_worker: int,
+        drop_last: bool,
+        train: bool,
+    ):
         if dataset is None:
             return None
         if train:
-            sampler = SAMDistributedSampler(dataset, sub_epochs_per_epoch=self.sub_epochs_per_epoch)
-            dataloader = DataLoader(dataset, batch_size, sampler=sampler, drop_last=True, num_workers=n_worker)
+            sampler = SAMDistributedSampler(
+                dataset, sub_epochs_per_epoch=self.sub_epochs_per_epoch
+            )
+            dataloader = DataLoader(
+                dataset,
+                batch_size,
+                sampler=sampler,
+                drop_last=True,
+                num_workers=n_worker,
+            )
             return dataloader
         else:
             sampler = DistributedSampler(dataset, shuffle=False)
-            dataloader = DataLoader(dataset, batch_size, sampler=sampler, drop_last=False, num_workers=n_worker)
+            dataloader = DataLoader(
+                dataset,
+                batch_size,
+                sampler=sampler,
+                drop_last=False,
+                num_workers=n_worker,
+            )
             return dataloader
 
     def set_epoch_and_sub_epoch(self, epoch: int, sub_epoch: int) -> None:

@@ -16,7 +16,9 @@ from efficientvit.models.nn.drop import apply_drop_func
 parser = argparse.ArgumentParser()
 parser.add_argument("config", metavar="FILE", help="config file")
 parser.add_argument("--path", type=str, metavar="DIR", help="run directory")
-parser.add_argument("--gpu", type=str, default=None)  # used in single machine experiments
+parser.add_argument(
+    "--gpu", type=str, default=None
+)  # used in single machine experiments
 parser.add_argument("--manual_seed", type=int, default=0)
 parser.add_argument("--resume", action="store_true")
 parser.add_argument("--amp", type=str, choices=["fp32", "fp16", "bf16"], default="fp32")
@@ -51,13 +53,17 @@ def main():
     setup.save_exp_config(config, args.path)
 
     # setup data provider
-    data_provider = setup.setup_data_provider(config, [ImageNetDataProvider], is_distributed=True)
+    data_provider = setup.setup_data_provider(
+        config, [ImageNetDataProvider], is_distributed=True
+    )
 
     # setup run config
     run_config = setup.setup_run_config(config, ClsRunConfig)
 
     # setup model
-    model = create_efficientvit_cls_model(config["net_config"]["name"], False, dropout=config["net_config"]["dropout"])
+    model = create_efficientvit_cls_model(
+        config["net_config"]["name"], False, dropout=config["net_config"]["dropout"]
+    )
     apply_drop_func(model.backbone.stages, config["backbone_drop"])
 
     # setup trainer
@@ -80,7 +86,9 @@ def main():
     # resume
     if args.resume:
         trainer.load_model()
-        trainer.data_provider = setup.setup_data_provider(config, [ImageNetDataProvider], is_distributed=True)
+        trainer.data_provider = setup.setup_data_provider(
+            config, [ImageNetDataProvider], is_distributed=True
+        )
     else:
         trainer.sync_model()
 

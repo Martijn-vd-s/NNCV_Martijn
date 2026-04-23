@@ -15,11 +15,31 @@ __all__ = ["create_efficientvit_sam_model"]
 
 
 REGISTERED_EFFICIENTVIT_SAM_MODEL: dict[str, tuple[Callable, float, str]] = {
-    "efficientvit-sam-l0": (efficientvit_sam_l0, 1e-6, "assets/checkpoints/efficientvit_sam/efficientvit_sam_l0.pt"),
-    "efficientvit-sam-l1": (efficientvit_sam_l1, 1e-6, "assets/checkpoints/efficientvit_sam/efficientvit_sam_l1.pt"),
-    "efficientvit-sam-l2": (efficientvit_sam_l2, 1e-6, "assets/checkpoints/efficientvit_sam/efficientvit_sam_l2.pt"),
-    "efficientvit-sam-xl0": (efficientvit_sam_xl0, 1e-6, "assets/checkpoints/efficientvit_sam/efficientvit_sam_xl0.pt"),
-    "efficientvit-sam-xl1": (efficientvit_sam_xl1, 1e-6, "assets/checkpoints/efficientvit_sam/efficientvit_sam_xl1.pt"),
+    "efficientvit-sam-l0": (
+        efficientvit_sam_l0,
+        1e-6,
+        "assets/checkpoints/efficientvit_sam/efficientvit_sam_l0.pt",
+    ),
+    "efficientvit-sam-l1": (
+        efficientvit_sam_l1,
+        1e-6,
+        "assets/checkpoints/efficientvit_sam/efficientvit_sam_l1.pt",
+    ),
+    "efficientvit-sam-l2": (
+        efficientvit_sam_l2,
+        1e-6,
+        "assets/checkpoints/efficientvit_sam/efficientvit_sam_l2.pt",
+    ),
+    "efficientvit-sam-xl0": (
+        efficientvit_sam_xl0,
+        1e-6,
+        "assets/checkpoints/efficientvit_sam/efficientvit_sam_xl0.pt",
+    ),
+    "efficientvit-sam-xl1": (
+        efficientvit_sam_xl1,
+        1e-6,
+        "assets/checkpoints/efficientvit_sam/efficientvit_sam_xl1.pt",
+    ),
 }
 
 

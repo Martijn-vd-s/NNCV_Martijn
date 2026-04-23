@@ -4,7 +4,10 @@ import numpy as np
 import torch
 
 from efficientvit.gazesamcore.utils.timer import Timer
-from efficientvit.models.efficientvit.sam import EfficientViTSam, EfficientViTSamPredictor
+from efficientvit.models.efficientvit.sam import (
+    EfficientViTSam,
+    EfficientViTSamPredictor,
+)
 from efficientvit.models.utils import get_device
 
 __all__ = ["PytorchEvitSam"]
@@ -42,7 +45,9 @@ class PytorchEvitSam(EfficientViTSamPredictor):
                 number of masks, and (H, W) is the original image size.
         """
         if not self.is_image_set:
-            raise RuntimeError("An image must be set with .set_image(...) before mask prediction.")
+            raise RuntimeError(
+                "An image must be set with .set_image(...) before mask prediction."
+            )
 
         device = get_device(self.model)
 

@@ -6,7 +6,13 @@ import sys
 import cv2
 import numpy as np
 import torch
-from eval_efficientvit_seg_model import ADE20KDataset, CityscapesDataset, Resize, ToTensor, get_canvas
+from eval_efficientvit_seg_model import (
+    ADE20KDataset,
+    CityscapesDataset,
+    Resize,
+    ToTensor,
+    get_canvas,
+)
 from PIL import Image
 from torchvision import transforms
 
@@ -21,12 +27,16 @@ from efficientvit.seg_model_zoo import create_efficientvit_seg_model
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--image_path", type=str, default="assets/fig/indoor.jpg")
-    parser.add_argument("--dataset", type=str, default="ade20k", choices=["cityscapes", "ade20k"])
+    parser.add_argument(
+        "--dataset", type=str, default="ade20k", choices=["cityscapes", "ade20k"]
+    )
     parser.add_argument("--gpu", type=str, default="0")
     parser.add_argument("--crop_size", type=int, default=512)
     parser.add_argument("--model", type=str, default="efficientvit-seg-l2-ade20k")
     parser.add_argument("--weight_url", type=str, default=None)
-    parser.add_argument("--output_path", type=str, default=".demo/efficientvit_seg_demo.png")
+    parser.add_argument(
+        "--output_path", type=str, default=".demo/efficientvit_seg_demo.png"
+    )
 
     args = parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu

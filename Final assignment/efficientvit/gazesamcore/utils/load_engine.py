@@ -3,7 +3,9 @@ try:
     from torch2trt import TRTModule
 except Exception as e:
     print(f"Skipping tensorrt-runtime import error: {e}")
-    print("If using a non-tensorrt runtime, ignore.  Otherwise, please ensure tensorrt and torch2trt are installed")
+    print(
+        "If using a non-tensorrt runtime, ignore.  Otherwise, please ensure tensorrt and torch2trt are installed"
+    )
     pass
 
 __all__ = [
@@ -24,7 +26,9 @@ def load_engine(path: str, input_names: list[str], output_names: list[str]):
             engine_bytes = f.read()
         engine = runtime.deserialize_cuda_engine(engine_bytes)
 
-    image_encoder_trt = TRTModule(engine=engine, input_names=input_names, output_names=output_names)
+    image_encoder_trt = TRTModule(
+        engine=engine, input_names=input_names, output_names=output_names
+    )
 
     return image_encoder_trt
 

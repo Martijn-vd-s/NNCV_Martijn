@@ -38,14 +38,21 @@ def main():
     for input_path in cfg.input_path_list:
         image = Image.open(input_path)
         target_w, target_h = (
-            image.size[0] // dc_ae.spatial_compression_ratio * dc_ae.spatial_compression_ratio,
-            image.size[1] // dc_ae.spatial_compression_ratio * dc_ae.spatial_compression_ratio,
+            image.size[0]
+            // dc_ae.spatial_compression_ratio
+            * dc_ae.spatial_compression_ratio,
+            image.size[1]
+            // dc_ae.spatial_compression_ratio
+            * dc_ae.spatial_compression_ratio,
         )
         image = image.crop((0, 0, target_w, target_h))
         x = transform(image)[None].to(device)
         latent = dc_ae.encode(x)
         y = dc_ae.decode(latent)
-        save_image(torch.cat([x, y], dim=3) * 0.5 + 0.5, os.path.join(cfg.run_dir, os.path.basename(input_path)))
+        save_image(
+            torch.cat([x, y], dim=3) * 0.5 + 0.5,
+            os.path.join(cfg.run_dir, os.path.basename(input_path)),
+        )
 
 
 if __name__ == "__main__":

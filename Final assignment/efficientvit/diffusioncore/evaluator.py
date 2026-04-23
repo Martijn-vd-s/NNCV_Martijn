@@ -11,7 +11,10 @@ from tqdm import tqdm
 
 from efficientvit.ae_model_zoo import DCAE_HF, REGISTERED_DCAE_MODEL, AutoencoderKL
 from efficientvit.apps.metrics.fid.fid import FIDStats, FIDStatsConfig
-from efficientvit.apps.metrics.inception_score.inception_score import InceptionScoreStats, InceptionScoreStatsConfig
+from efficientvit.apps.metrics.inception_score.inception_score import (
+    InceptionScoreStats,
+    InceptionScoreStatsConfig,
+)
 from efficientvit.apps.utils.dist import (
     dist_barrier,
     dist_init,
@@ -21,7 +24,10 @@ from efficientvit.apps.utils.dist import (
     is_dist_initialized,
     is_master,
 )
-from efficientvit.diffusioncore.data_provider.sample_class import SampleClassDataProvider, SampleClassDataProviderConfig
+from efficientvit.diffusioncore.data_provider.sample_class import (
+    SampleClassDataProvider,
+    SampleClassDataProviderConfig,
+)
 from efficientvit.diffusioncore.models.dit import DiT, DiTConfig
 from efficientvit.diffusioncore.models.uvit import UViT, UViTConfig
 from efficientvit.models.utils.network import get_dtype_from_str, is_parallel
@@ -46,7 +52,9 @@ class EvaluatorConfig:
 
     # dataset
     evaluate_dataset: str = "sample_class"
-    sample_class: SampleClassDataProviderConfig = field(default_factory=SampleClassDataProviderConfig)
+    sample_class: SampleClassDataProviderConfig = field(
+        default_factory=SampleClassDataProviderConfig
+    )
 
     # autoencoder
     autoencoder: Optional[str] = None
@@ -62,7 +70,9 @@ class EvaluatorConfig:
     compute_fid: bool = True
     fid: FIDStatsConfig = field(default_factory=FIDStatsConfig)
     compute_inception_score: bool = True
-    inception_score: InceptionScoreStatsConfig = field(default_factory=InceptionScoreStatsConfig)
+    inception_score: InceptionScoreStatsConfig = field(
+        default_factory=InceptionScoreStatsConfig
+    )
 
 
 class Evaluator:
@@ -83,21 +93,31 @@ class Evaluator:
             dtype = get_dtype_from_str(cfg.autoencoder_dtype)
             if cfg.autoencoder in REGISTERED_DCAE_MODEL:
                 self.autoencoder = (
-                    DCAE_HF.from_pretrained(f"mit-han-lab/{cfg.autoencoder}").eval().to(device=device, dtype=dtype)
+                    DCAE_HF.from_pretrained(f"mit-han-lab/{cfg.autoencoder}")
+                    .eval()
+                    .to(device=device, dtype=dtype)
                 )
                 assert cfg.scaling_factor is not None
             elif cfg.autoencoder in ["stabilityai/sd-vae-ft-ema", "flux-vae"]:
-                self.autoencoder = AutoencoderKL(cfg.autoencoder).eval().to(device=device, dtype=dtype)
+                self.autoencoder = (
+                    AutoencoderKL(cfg.autoencoder).eval().to(device=device, dtype=dtype)
+                )
                 cfg.scaling_factor = self.autoencoder.model.config.scaling_factor
             else:
-                raise ValueError(f"{cfg.model} is not supported for evaluating and training")
+                raise ValueError(
+                    f"{cfg.model} is not supported for evaluating and training"
+                )
 
         # model
         if cfg.model == "dit":
-            cfg.dit.input_size = cfg.resolution // self.autoencoder.spatial_compression_ratio
+            cfg.dit.input_size = (
+                cfg.resolution // self.autoencoder.spatial_compression_ratio
+            )
             model = DiT(cfg.dit)
         elif cfg.model == "uvit":
-            cfg.uvit.input_size = cfg.resolution // self.autoencoder.spatial_compression_ratio
+            cfg.uvit.input_size = (
+                cfg.resolution // self.autoencoder.spatial_compression_ratio
+            )
             model = UViT(cfg.uvit)
         else:
             raise NotImplementedError
@@ -137,7 +157,9 @@ class Evaluator:
         return self.model.module if is_parallel(self.model) else self.model
 
     @torch.no_grad()
-    def evaluate(self, step: int, network: Optional[nn.Module] = None, f_log=sys.stdout) -> dict[str, Any]:
+    def evaluate(
+        self, step: int, network: Optional[nn.Module] = None, f_log=sys.stdout
+    ) -> dict[str, Any]:
         if network is None:
             network = self.network
         network.eval()
@@ -183,23 +205,38 @@ class Evaluator:
                 inputs_null = inputs_null.cuda()
                 # sample
                 if self.cfg.model in ["dit", "uvit"]:
-                    with torch.autocast(device_type="cuda", dtype=self.amp_dtype, enabled=True):
-                        latent_samples = network.generate(inputs, inputs_null, self.cfg.cfg_scale, eval_generator)
+                    with torch.autocast(
+                        device_type="cuda", dtype=self.amp_dtype, enabled=True
+                    ):
+                        latent_samples = network.generate(
+                            inputs, inputs_null, self.cfg.cfg_scale, eval_generator
+                        )
                     latent_samples = (
-                        latent_samples.to(dtype=get_dtype_from_str(self.cfg.autoencoder_dtype))
+                        latent_samples.to(
+                            dtype=get_dtype_from_str(self.cfg.autoencoder_dtype)
+                        )
                         / self.cfg.scaling_factor
                     )
                     image_samples = self.autoencoder.decode(latent_samples)
                     assert torch.isnan(image_samples).sum() == 0, "NaN detected!"
-                    image_samples_uint8 = torch.clamp(127.5 * image_samples + 128.0, 0, 255).to(dtype=torch.uint8)
-                    image_samples_numpy = image_samples_uint8.permute(0, 2, 3, 1).cpu().numpy()
+                    image_samples_uint8 = torch.clamp(
+                        127.5 * image_samples + 128.0, 0, 255
+                    ).to(dtype=torch.uint8)
+                    image_samples_numpy = (
+                        image_samples_uint8.permute(0, 2, 3, 1).cpu().numpy()
+                    )
                 else:
-                    raise ValueError(f"diffusion model {self.cfg.model} is not supported")
+                    raise ValueError(
+                        f"diffusion model {self.cfg.model} is not supported"
+                    )
 
                 if (
-                    num_saved_images < self.cfg.num_save_images and (is_master() or self.cfg.save_images_at_all_procs)
+                    num_saved_images < self.cfg.num_save_images
+                    and (is_master() or self.cfg.save_images_at_all_procs)
                 ) or self.cfg.save_all_images:
-                    image_samples_PIL = [Image.fromarray(image) for image in image_samples_numpy]
+                    image_samples_PIL = [
+                        Image.fromarray(image) for image in image_samples_numpy
+                    ]
                     for j, image_sample_PIL in enumerate(image_samples_PIL):
                         if self.cfg.save_all_images:
                             idx = num_saved_images * self.dist_size + self.rank
@@ -208,7 +245,10 @@ class Evaluator:
                                 break
                             idx = num_saved_images
                         image_sample_PIL.save(
-                            os.path.join(evaluate_dir, f"{self.rank}_{idx:05d}_{inputs[j].item()}.png")
+                            os.path.join(
+                                evaluate_dir,
+                                f"{self.rank}_{idx:05d}_{inputs[j].item()}.png",
+                            )
                         )
                         num_saved_images += 1
                     del image_samples_PIL

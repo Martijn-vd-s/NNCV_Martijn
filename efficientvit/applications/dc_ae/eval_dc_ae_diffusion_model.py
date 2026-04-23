@@ -9,7 +9,10 @@ ROOT_DIR = os.path.dirname(os.path.dirname(BASE_DIR))
 sys.path.append(ROOT_DIR)
 
 from efficientvit.apps.utils.dist import is_master
-from efficientvit.diffusion_model_zoo import DCAE_Diffusion_HF, create_dc_ae_diffusion_model_cfg
+from efficientvit.diffusion_model_zoo import (
+    DCAE_Diffusion_HF,
+    create_dc_ae_diffusion_model_cfg,
+)
 from efficientvit.diffusioncore.evaluator import Evaluator, EvaluatorConfig
 
 
@@ -25,7 +28,9 @@ class EvalDiffusionModelConfig:
 
 def main():
     cfg: EvalDiffusionModelConfig = OmegaConf.to_object(
-        OmegaConf.merge(OmegaConf.structured(EvalDiffusionModelConfig), OmegaConf.from_cli())
+        OmegaConf.merge(
+            OmegaConf.structured(EvalDiffusionModelConfig), OmegaConf.from_cli()
+        )
     )
 
     evaluator_cfg: EvaluatorConfig = OmegaConf.structured(EvaluatorConfig)
@@ -36,7 +41,9 @@ def main():
         evaluator_cfg.sample_class.batch_size = 64
     else:
         raise NotImplementedError
-    evaluator_cfg = OmegaConf.merge(evaluator_cfg, OmegaConf.structured(create_dc_ae_diffusion_model_cfg(cfg.model)))
+    evaluator_cfg = OmegaConf.merge(
+        evaluator_cfg, OmegaConf.structured(create_dc_ae_diffusion_model_cfg(cfg.model))
+    )
     evaluator_cfg.amp = cfg.amp
     evaluator_cfg.autoencoder_dtype = cfg.autoencoder_dtype
     evaluator_cfg.cfg_scale = cfg.cfg_scale

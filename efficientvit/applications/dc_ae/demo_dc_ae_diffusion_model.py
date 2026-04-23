@@ -27,7 +27,9 @@ class DemoDiffusionModelConfig:
 def main():
     torch.set_grad_enabled(False)
     cfg: DemoDiffusionModelConfig = OmegaConf.to_object(
-        OmegaConf.merge(OmegaConf.structured(DemoDiffusionModelConfig), OmegaConf.from_cli())
+        OmegaConf.merge(
+            OmegaConf.structured(DemoDiffusionModelConfig), OmegaConf.from_cli()
+        )
     )
 
     device = torch.device("cuda")
@@ -44,12 +46,19 @@ def main():
     eval_generator = torch.Generator(device=device)
     eval_generator.manual_seed(0)
     inputs = torch.tensor(
-        [279, 333, 979, 936, 933, 145, 497, 1, 248, 360, 793, 12, 387, 437, 938, 978], dtype=torch.int, device=device
+        [279, 333, 979, 936, 933, 145, 497, 1, 248, 360, 793, 12, 387, 437, 938, 978],
+        dtype=torch.int,
+        device=device,
     )
     num_samples = inputs.shape[0]
     inputs_null = 1000 * torch.ones((num_samples,), dtype=torch.int, device=device)
-    latent_samples = dc_ae_diffusion.diffusion_model.generate(inputs, inputs_null, cfg.cfg_scale, eval_generator)
-    latent_samples = latent_samples.to(dtype=get_dtype_from_str(cfg.autoencoder_dtype)) / dc_ae_diffusion.scaling_factor
+    latent_samples = dc_ae_diffusion.diffusion_model.generate(
+        inputs, inputs_null, cfg.cfg_scale, eval_generator
+    )
+    latent_samples = (
+        latent_samples.to(dtype=get_dtype_from_str(cfg.autoencoder_dtype))
+        / dc_ae_diffusion.scaling_factor
+    )
     image_samples = dc_ae_diffusion.autoencoder.decode(latent_samples)
     save_path = os.path.join(cfg.run_dir, "demo.png")
     os.makedirs(os.path.dirname(save_path), exist_ok=True)

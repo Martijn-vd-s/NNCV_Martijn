@@ -16,7 +16,9 @@ from efficientvit.apps.utils import AverageMeter
 from efficientvit.cls_model_zoo import create_efficientvit_cls_model
 
 
-def accuracy(output: torch.Tensor, target: torch.Tensor, topk=(1,)) -> list[torch.Tensor]:
+def accuracy(
+    output: torch.Tensor, target: torch.Tensor, topk=(1,)
+) -> list[torch.Tensor]:
     maxk = max(topk)
     batch_size = target.shape[0]
 
@@ -36,7 +38,9 @@ def main():
     parser.add_argument("--path", type=str, default="~/dataset/imagenet/val")
     parser.add_argument("--gpu", type=str, default="all")
     parser.add_argument("--batch_size", help="batch size per gpu", type=int, default=50)
-    parser.add_argument("-j", "--workers", help="number of workers", type=int, default=10)
+    parser.add_argument(
+        "-j", "--workers", help="number of workers", type=int, default=10
+    )
     parser.add_argument("--image_size", type=int, default=224)
     parser.add_argument("--crop_ratio", type=float, default=0.95)
     parser.add_argument("--model", type=str)
@@ -59,11 +63,14 @@ def main():
             transforms.Compose(
                 [
                     transforms.Resize(
-                        int(math.ceil(args.image_size / args.crop_ratio)), interpolation=InterpolationMode.BICUBIC
+                        int(math.ceil(args.image_size / args.crop_ratio)),
+                        interpolation=InterpolationMode.BICUBIC,
                     ),
                     transforms.CenterCrop(args.image_size),
                     transforms.ToTensor(),
-                    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                    transforms.Normalize(
+                        mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+                    ),
                 ]
             ),
         ),

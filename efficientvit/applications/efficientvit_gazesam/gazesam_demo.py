@@ -24,9 +24,18 @@ from efficientvit.gazesamcore.evit import get_evit_masks
 from efficientvit.gazesamcore.face import detect_face, get_face_bbox
 from efficientvit.gazesamcore.gaze import estimate_gaze, get_gaze_endpoints
 from efficientvit.gazesamcore.utils.draw import annotate_blank_frame, annotate_frame
-from efficientvit.gazesamcore.utils.smoother import GazeSmoother, LandmarkSmoother, OneEuroFilter
+from efficientvit.gazesamcore.utils.smoother import (
+    GazeSmoother,
+    LandmarkSmoother,
+    OneEuroFilter,
+)
 from efficientvit.gazesamcore.utils.timer import Timer
-from efficientvit.gazesamcore.yolo import filter_bboxes_depth, filter_bboxes_face, filter_bboxes_gaze, get_yolo_bboxes
+from efficientvit.gazesamcore.yolo import (
+    filter_bboxes_depth,
+    filter_bboxes_face,
+    filter_bboxes_gaze,
+    get_yolo_bboxes,
+)
 
 
 def setup_video(webcam, input_vid, output_dir):
@@ -84,7 +93,9 @@ def set_precisions(args):
         args.depth_precision = "fp16"
 
     if args.gaze_estimation_precision is None:
-        args.gaze_estimation_precision = "fp16" if args.precision_mode == "default" else "int8"
+        args.gaze_estimation_precision = (
+            "fp16" if args.precision_mode == "default" else "int8"
+        )
 
     if args.yolo_precision is None:
         args.yolo_precision = "fp16" if args.precision_mode == "default" else "int8"
@@ -205,7 +216,7 @@ def get_args():
 def render_frame(out, frame, webcam, frame_times):
     fps = ""
     if len(frame_times) > 2:
-        fps = f"RTX 4070: {int(1/frame_times[-1])} FPS"
+        fps = f"RTX 4070: {int(1 / frame_times[-1])} FPS"
 
     cv2.putText(
         frame,
@@ -229,8 +240,12 @@ def main(args):
     bbox_smoother = LandmarkSmoother(OneEuroFilter, pt_num=2, min_cutoff=0.0, beta=1.0)
     gaze_smoother = GazeSmoother(OneEuroFilter, min_cutoff=0.01, beta=0.8)
 
-    face_detection_model = load_face_detection_model(args.runtime, args.face_detection_precision)
-    gaze_estimation_model = load_gaze_estimation_model(args.runtime, args.gaze_estimation_precision)
+    face_detection_model = load_face_detection_model(
+        args.runtime, args.face_detection_precision
+    )
+    gaze_estimation_model = load_gaze_estimation_model(
+        args.runtime, args.gaze_estimation_precision
+    )
     yolo_model = load_yolo_model(args.runtime, args.yolo_precision)
     depth_model = load_depth_model(args.runtime, args.depth_precision)
     evit_model = load_evit_model(
@@ -267,7 +282,9 @@ def main(args):
                 saved_mask, saved_bbox = None, None
                 continue
 
-            gaze_yawpitch = estimate_gaze(frame, face_bbox, gaze_estimation_model, args.runtime, timer)
+            gaze_yawpitch = estimate_gaze(
+                frame, face_bbox, gaze_estimation_model, args.runtime, timer
+            )
 
             if gaze_yawpitch is None:
                 render_frame(out, frame, args.webcam, frame_times)
@@ -315,7 +332,9 @@ def main(args):
                 saved_mask, saved_bbox = None, None
                 continue
 
-            masks, iou_preds = get_evit_masks(frame, bboxes, evit_model, args.runtime, timer)
+            masks, iou_preds = get_evit_masks(
+                frame, bboxes, evit_model, args.runtime, timer
+            )
             frame, saved_mask, saved_bbox = annotate_frame(
                 frame, gaze_head, gaze_tail, bboxes, masks, iou_preds, depth_mask
             )

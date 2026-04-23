@@ -17,7 +17,9 @@ from efficientvit.diffusioncore.models.uvit import (
 __all__ = ["create_dc_ae_diffusion_model", "DCAE_Diffusion_HF"]
 
 
-REGISTERED_DCAE_DIFFUSION_MODEL: dict[str, tuple[Callable, str, float, int, Optional[str]]] = {
+REGISTERED_DCAE_DIFFUSION_MODEL: dict[
+    str, tuple[Callable, str, float, int, Optional[str]]
+] = {
     "dc-ae-f32c32-in-1.0-dit-xl-in-512px": (
         dc_ae_dit_xl_in_512px,
         "dc-ae-f32c32-in-1.0",
@@ -101,12 +103,18 @@ REGISTERED_DCAE_DIFFUSION_MODEL: dict[str, tuple[Callable, str, float, int, Opti
 }
 
 
-def create_dc_ae_diffusion_model_cfg(name: str, pretrained_path: Optional[str] = None) -> EvaluatorConfig:
-    diffusion_cls, ae_name, scaling_factor, in_channels, default_pt = REGISTERED_DCAE_DIFFUSION_MODEL[name]
+def create_dc_ae_diffusion_model_cfg(
+    name: str, pretrained_path: Optional[str] = None
+) -> EvaluatorConfig:
+    diffusion_cls, ae_name, scaling_factor, in_channels, default_pt = (
+        REGISTERED_DCAE_DIFFUSION_MODEL[name]
+    )
     pretrained_path = default_pt if pretrained_path is None else pretrained_path
     cfg_str = diffusion_cls(ae_name, scaling_factor, in_channels, pretrained_path)
     cfg = OmegaConf.from_dotlist(cfg_str.split(" ") + ["run_dir=tmp"])
-    cfg: EvaluatorConfig = OmegaConf.to_object(OmegaConf.merge(OmegaConf.structured(EvaluatorConfig), cfg))
+    cfg: EvaluatorConfig = OmegaConf.to_object(
+        OmegaConf.merge(OmegaConf.structured(EvaluatorConfig), cfg)
+    )
     return cfg
 
 

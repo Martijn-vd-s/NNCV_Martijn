@@ -210,9 +210,15 @@ class EfficientViTLargeBackbone(nn.Module):
         act_func="gelu",
     ) -> None:
         super().__init__()
-        block_list = ["res", "fmb", "fmb", "mb", "att"] if block_list is None else block_list
+        block_list = (
+            ["res", "fmb", "fmb", "mb", "att"] if block_list is None else block_list
+        )
         expand_list = [1, 4, 4, 4, 6] if expand_list is None else expand_list
-        fewer_norm_list = [False, False, False, True, True] if fewer_norm_list is None else fewer_norm_list
+        fewer_norm_list = (
+            [False, False, False, True, True]
+            if fewer_norm_list is None
+            else fewer_norm_list
+        )
 
         self.width_list = []
         self.stages = []
@@ -245,7 +251,9 @@ class EfficientViTLargeBackbone(nn.Module):
         for stage_id, (w, d) in enumerate(zip(width_list[1:], depth_list[1:]), start=1):
             stage = []
             block = self.build_local_block(
-                block="mb" if block_list[stage_id] not in ["mb", "fmb"] else block_list[stage_id],
+                block="mb"
+                if block_list[stage_id] not in ["mb", "fmb"]
+                else block_list[stage_id],
                 in_channels=in_channels,
                 out_channels=w,
                 stride=2,

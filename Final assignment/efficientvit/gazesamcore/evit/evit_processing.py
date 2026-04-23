@@ -22,7 +22,9 @@ def get_evit_masks(img, bboxes, model, mode, timer=None):
         masks, iou_preds = run_evit_model_tensorrt(img, bboxes, model)
 
     else:
-        raise NotImplementedError(f"{mode} mode not implemented for evit image segmentation")
+        raise NotImplementedError(
+            f"{mode} mode not implemented for evit image segmentation"
+        )
 
     if timer is not None:
         timer.stop("evit")

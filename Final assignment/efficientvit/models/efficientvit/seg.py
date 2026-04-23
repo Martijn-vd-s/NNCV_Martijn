@@ -3,7 +3,10 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
-from efficientvit.models.efficientvit.backbone import EfficientViTBackbone, EfficientViTLargeBackbone
+from efficientvit.models.efficientvit.backbone import (
+    EfficientViTBackbone,
+    EfficientViTLargeBackbone,
+)
 from efficientvit.models.nn import (
     ConvLayer,
     DAGBlock,
@@ -48,7 +51,9 @@ class SegHead(DAGBlock):
         for fid, in_channel, stride in zip(fid_list, in_channel_list, stride_list):
             factor = stride // head_stride
             if factor == 1:
-                inputs[fid] = ConvLayer(in_channel, head_width, 1, norm=norm, act_func=None)
+                inputs[fid] = ConvLayer(
+                    in_channel, head_width, 1, norm=norm, act_func=None
+                )
             else:
                 inputs[fid] = OpSequential(
                     [
@@ -86,7 +91,13 @@ class SegHead(DAGBlock):
                     (
                         None
                         if final_expand is None
-                        else ConvLayer(head_width, head_width * final_expand, 1, norm=norm, act_func=act_func)
+                        else ConvLayer(
+                            head_width,
+                            head_width * final_expand,
+                            1,
+                            norm=norm,
+                            act_func=act_func,
+                        )
                     ),
                     ConvLayer(
                         head_width * (1 if final_expand is None else final_expand),
@@ -101,11 +112,15 @@ class SegHead(DAGBlock):
             )
         }
 
-        super(SegHead, self).__init__(inputs, "add", None, middle=middle, outputs=outputs)
+        super(SegHead, self).__init__(
+            inputs, "add", None, middle=middle, outputs=outputs
+        )
 
 
 class EfficientViTSeg(nn.Module):
-    def __init__(self, backbone: EfficientViTBackbone | EfficientViTLargeBackbone, head: SegHead) -> None:
+    def __init__(
+        self, backbone: EfficientViTBackbone | EfficientViTLargeBackbone, head: SegHead
+    ) -> None:
         super().__init__()
         self.backbone = backbone
         self.head = head

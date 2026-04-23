@@ -11,7 +11,12 @@ from scipy import linalg
 from torch.nn.functional import adaptive_avg_pool2d
 
 from efficientvit.apps.metrics.fid.inception import InceptionV3
-from efficientvit.apps.utils.dist import get_dist_local_rank, is_dist_initialized, is_master, sync_tensor
+from efficientvit.apps.utils.dist import (
+    get_dist_local_rank,
+    is_dist_initialized,
+    is_master,
+    sync_tensor,
+)
 
 __all__ = ["FIDStatsConfig", "FIDStats"]
 
@@ -45,15 +50,21 @@ def frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6) -> float:
     sigma1 = np.atleast_2d(sigma1)
     sigma2 = np.atleast_2d(sigma2)
 
-    assert mu1.shape == mu2.shape, "Training and test mean vectors have different lengths"
-    assert sigma1.shape == sigma2.shape, "Training and test covariances have different dimensions"
+    assert mu1.shape == mu2.shape, (
+        "Training and test mean vectors have different lengths"
+    )
+    assert sigma1.shape == sigma2.shape, (
+        "Training and test covariances have different dimensions"
+    )
 
     diff = mu1 - mu2
 
     # product might be almost singular
     covmean, _ = linalg.sqrtm(sigma1.dot(sigma2), disp=False)
     if not np.isfinite(covmean).all():
-        warnings.warn(f"fid calculation produces singular product; adding {eps} to diagonal of cov estimates")
+        warnings.warn(
+            f"fid calculation produces singular product; adding {eps} to diagonal of cov estimates"
+        )
         offset = np.eye(sigma1.shape[0]) * eps
         covmean = linalg.sqrtm((sigma1 + offset).dot(sigma2 + offset))
 
@@ -109,7 +120,9 @@ class FIDStats:
         batch: torch.Tensor = self.transform(batch)
 
         if list(batch.shape[-2:]) != [299, 299]:
-            batch = F.interpolate(batch, size=(299, 299), mode="bilinear", align_corners=False)
+            batch = F.interpolate(
+                batch, size=(299, 299), mode="bilinear", align_corners=False
+            )
 
         pred = self.model(batch)[0]
         if pred.size(2) != 1 or pred.size(3) != 1:
@@ -127,17 +140,33 @@ class FIDStats:
         self.pred_dot_product_sum += pred.T @ pred
 
     def get_stats(self):
-        num_samples, pred_sum, pred_dot_product_sum = self.num_samples, self.pred_sum, self.pred_dot_product_sum
+        num_samples, pred_sum, pred_dot_product_sum = (
+            self.num_samples,
+            self.pred_sum,
+            self.pred_dot_product_sum,
+        )
         if is_dist_initialized():
-            num_samples = sync_tensor(torch.tensor(num_samples).cuda(), reduce="sum").cpu().numpy()
-            pred_sum = sync_tensor(torch.from_numpy(pred_sum).cuda(), reduce="sum").cpu().numpy()
+            num_samples = (
+                sync_tensor(torch.tensor(num_samples).cuda(), reduce="sum")
+                .cpu()
+                .numpy()
+            )
+            pred_sum = (
+                sync_tensor(torch.from_numpy(pred_sum).cuda(), reduce="sum")
+                .cpu()
+                .numpy()
+            )
             pred_dot_product_sum = (
-                sync_tensor(torch.from_numpy(pred_dot_product_sum).cuda(), reduce="sum").cpu().numpy()
+                sync_tensor(torch.from_numpy(pred_dot_product_sum).cuda(), reduce="sum")
+                .cpu()
+                .numpy()
             )
             if not is_master():
                 return None, None
         mu = pred_sum / num_samples
-        sigma = (pred_dot_product_sum - num_samples * (mu[:, None] @ mu[None])) / (num_samples - 1)
+        sigma = (pred_dot_product_sum - num_samples * (mu[:, None] @ mu[None])) / (
+            num_samples - 1
+        )
 
         if self.cfg.save_path is not None:
             os.makedirs(os.path.dirname(self.cfg.save_path), exist_ok=True)

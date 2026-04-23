@@ -11,7 +11,9 @@ from efficientvit.diffusioncore.trainer import Trainer, TrainerConfig
 
 
 def main():
-    cfg: TrainerConfig = OmegaConf.to_object(OmegaConf.merge(OmegaConf.structured(TrainerConfig), OmegaConf.from_cli()))
+    cfg: TrainerConfig = OmegaConf.to_object(
+        OmegaConf.merge(OmegaConf.structured(TrainerConfig), OmegaConf.from_cli())
+    )
     trainer = Trainer(cfg)
     trainer.train()
 

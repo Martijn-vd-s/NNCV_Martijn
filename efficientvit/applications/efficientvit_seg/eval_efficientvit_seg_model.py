@@ -75,7 +75,9 @@ class SegIOU:
         self.num_classes = num_classes
         self.ignore_index = ignore_index
 
-    def __call__(self, outputs: torch.Tensor, targets: torch.Tensor) -> dict[str, torch.Tensor]:
+    def __call__(
+        self, outputs: torch.Tensor, targets: torch.Tensor
+    ) -> dict[str, torch.Tensor]:
         outputs = (outputs + 1) * (targets != self.ignore_index)
         targets = (targets + 1) * (targets != self.ignore_index)
         intersections = outputs * (outputs == targets)
@@ -611,7 +613,11 @@ def get_canvas(
     image_shape = image.shape[:2]
     mask_shape = mask.shape
     if image_shape != mask_shape:
-        mask = cv2.resize(mask, dsize=(image_shape[1], image_shape[0]), interpolation=cv2.INTER_NEAREST)
+        mask = cv2.resize(
+            mask,
+            dsize=(image_shape[1], image_shape[0]),
+            interpolation=cv2.INTER_NEAREST,
+        )
     seg_mask = np.zeros_like(image, dtype=np.uint8)
     for k, color in enumerate(colors):
         seg_mask[mask == k, :] = color
@@ -622,11 +628,17 @@ def get_canvas(
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--path", type=str, default="~/dataset/cityscapes/leftImg8bit/val")
-    parser.add_argument("--dataset", type=str, default="cityscapes", choices=["cityscapes", "ade20k"])
+    parser.add_argument(
+        "--path", type=str, default="~/dataset/cityscapes/leftImg8bit/val"
+    )
+    parser.add_argument(
+        "--dataset", type=str, default="cityscapes", choices=["cityscapes", "ade20k"]
+    )
     parser.add_argument("--gpu", type=str, default="0")
     parser.add_argument("--batch_size", help="batch size per gpu", type=int, default=1)
-    parser.add_argument("-j", "--workers", help="number of workers", type=int, default=4)
+    parser.add_argument(
+        "-j", "--workers", help="number of workers", type=int, default=4
+    )
     parser.add_argument("--crop_size", type=int, default=1024)
     parser.add_argument("--model", type=str)
     parser.add_argument("--weight_url", type=str, default=None)
@@ -668,7 +680,9 @@ def main():
     union = AverageMeter(is_distributed=False)
     iou = SegIOU(len(dataset.classes))
     with torch.inference_mode():
-        with tqdm(total=len(data_loader), desc=f"Eval {args.model} on {args.dataset}") as t:
+        with tqdm(
+            total=len(data_loader), desc=f"Eval {args.model} on {args.dataset}"
+        ) as t:
             for feed_dict in data_loader:
                 images, mask = feed_dict["data"].cuda(), feed_dict["label"].cuda()
                 # compute output
@@ -691,7 +705,9 @@ def main():
 
                 if args.save_path is not None:
                     with open(os.path.join(args.save_path, "summary.txt"), "a") as fout:
-                        for i, (idx, image_path) in enumerate(zip(feed_dict["index"], feed_dict["image_path"])):
+                        for i, (idx, image_path) in enumerate(
+                            zip(feed_dict["index"], feed_dict["image_path"])
+                        ):
                             pred = output[i].cpu().numpy()
                             raw_image = np.array(Image.open(image_path).convert("RGB"))
                             canvas = get_canvas(raw_image, pred, dataset.class_colors)

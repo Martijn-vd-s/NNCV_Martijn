@@ -14,7 +14,13 @@ import wandb
 from omegaconf import OmegaConf
 from tqdm import tqdm
 
-from efficientvit.apps.utils.dist import dist_barrier, get_dist_size, is_dist_initialized, is_master, sync_tensor
+from efficientvit.apps.utils.dist import (
+    dist_barrier,
+    get_dist_size,
+    is_dist_initialized,
+    is_master,
+    sync_tensor,
+)
 from efficientvit.apps.utils.ema import EMA
 from efficientvit.apps.utils.lr import ConstantLRwithWarmup
 from efficientvit.apps.utils.metric import AverageMeter
@@ -46,7 +52,9 @@ class LRSchedulerConfig:
 @dataclass
 class TrainerConfig(EvaluatorConfig):
     train_dataset: str = "latent"
-    latent_imagenet: LatentImageNetDataProviderConfig = field(default_factory=LatentImageNetDataProviderConfig)
+    latent_imagenet: LatentImageNetDataProviderConfig = field(
+        default_factory=LatentImageNetDataProviderConfig
+    )
 
     resume: bool = True
     resume_path: Optional[str] = None
@@ -82,7 +90,9 @@ class Trainer(Evaluator):
         self.setup_run_dir()
         self.setup_optimizer()
         self.setup_lr_scheduler()
-        self.ema = EMA(self.network.get_trainable_modules(), cfg.ema_decay, cfg.ema_warmup_steps)
+        self.ema = EMA(
+            self.network.get_trainable_modules(), cfg.ema_decay, cfg.ema_warmup_steps
+        )
         self.setup_logger()
 
         if cfg.compute_fid:
@@ -132,7 +142,9 @@ class Trainer(Evaluator):
 
         if self.cfg.optimizer.name == "adamw":
             if len(no_wd_keys) > 0:
-                self.optimizer = torch.optim.AdamW(net_params, lr=self.cfg.optimizer.lr, betas=self.cfg.optimizer.betas)
+                self.optimizer = torch.optim.AdamW(
+                    net_params, lr=self.cfg.optimizer.lr, betas=self.cfg.optimizer.betas
+                )
             else:
                 self.optimizer = torch.optim.AdamW(
                     trainable_modules.parameters(),
@@ -147,11 +159,17 @@ class Trainer(Evaluator):
         lr_scheduler_name = self.cfg.lr_scheduler.name
         if lr_scheduler_name == "cosine_annealing":
             num_iters = self.cfg.num_epochs * len(self.train_data_provider.train)
-            self.lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=num_iters, eta_min=0.0)
+            self.lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+                self.optimizer, T_max=num_iters, eta_min=0.0
+            )
         elif lr_scheduler_name == "constant":
-            self.lr_scheduler = torch.optim.lr_scheduler.ConstantLR(self.optimizer, factor=1.0)
+            self.lr_scheduler = torch.optim.lr_scheduler.ConstantLR(
+                self.optimizer, factor=1.0
+            )
         elif lr_scheduler_name == "constant_with_warmup":
-            self.lr_scheduler = ConstantLRwithWarmup(self.optimizer, self.cfg.lr_scheduler.warmup_steps, 0)
+            self.lr_scheduler = ConstantLRwithWarmup(
+                self.optimizer, self.cfg.lr_scheduler.warmup_steps, 0
+            )
         else:
             raise NotImplementedError
 
@@ -162,7 +180,9 @@ class Trainer(Evaluator):
             self.f_log = sys.stdout
         self.print_and_f_log(f"run_dir: {self.cfg.run_dir}", flush=True)
 
-        self.log_to_wandb = self.cfg.log and (self.cfg.wandb_entity is not None or self.cfg.wandb_project is not None)
+        self.log_to_wandb = self.cfg.log and (
+            self.cfg.wandb_entity is not None or self.cfg.wandb_project is not None
+        )
         if not self.log_to_wandb or not is_master():
             return
         self.logger = wandb.init(
@@ -201,9 +221,15 @@ class Trainer(Evaluator):
             torch_rng_state = torch.get_rng_state()[None]
             torch_cuda_rng_state = torch.cuda.get_rng_state()[None]
             if is_dist_initialized():
-                train_generator_state = sync_tensor(train_generator_state.cuda(), reduce="cat").cpu()
-                torch_rng_state = sync_tensor(torch_rng_state.cuda(), reduce="cat").cpu()
-                torch_cuda_rng_state = sync_tensor(torch_cuda_rng_state.cuda(), reduce="cat").cpu()
+                train_generator_state = sync_tensor(
+                    train_generator_state.cuda(), reduce="cat"
+                ).cpu()
+                torch_rng_state = sync_tensor(
+                    torch_rng_state.cuda(), reduce="cat"
+                ).cpu()
+                torch_cuda_rng_state = sync_tensor(
+                    torch_cuda_rng_state.cuda(), reduce="cat"
+                ).cpu()
         if not is_master():
             return
         model_to_save = self.network
@@ -234,14 +260,18 @@ class Trainer(Evaluator):
             shutil.copy(model_path_, model_path)
         else:
             torch.save(checkpoint, model_path)
-        self.print_and_f_log(f"save model to {model_path} at step {self.global_step}\n", flush=True)
+        self.print_and_f_log(
+            f"save model to {model_path} at step {self.global_step}\n", flush=True
+        )
 
     def resume_from_checkpoint(self, checkpoint_path: str):
         self.print_and_f_log(f"loading checkpoint {checkpoint_path}\n")
         checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
 
         # load checkpoint
-        self.network.get_trainable_modules().load_state_dict(checkpoint["state_dict"], strict=False)
+        self.network.get_trainable_modules().load_state_dict(
+            checkpoint["state_dict"], strict=False
+        )
         self.ema.load_state_dict(checkpoint[f"ema"])
         self.optimizer.load_state_dict(checkpoint[f"optimizer"])
         self.print_and_f_log(f"optimizer loaded\n")
@@ -256,7 +286,9 @@ class Trainer(Evaluator):
             self.lr_scheduler.load_state_dict(checkpoint[f"lr_scheduler"])
             self.print_and_f_log(f"lr scheduler loaded\n")
             if get_dist_size() == checkpoint["train_generator_state"].shape[0]:
-                self.train_generator.set_state(checkpoint["train_generator_state"][self.rank])
+                self.train_generator.set_state(
+                    checkpoint["train_generator_state"][self.rank]
+                )
                 self.print_and_f_log(f"train generator state loaded\n")
                 torch.set_rng_state(checkpoint["torch_rng_state"][self.rank])
                 self.print_and_f_log(f"torch rng state loaded\n")
@@ -270,15 +302,19 @@ class Trainer(Evaluator):
         self.print_and_f_log(f"checkpoint {checkpoint_path} loaded\n", flush=True)
 
     def try_resume_from_checkpoint(self):
-        if os.path.exists(os.path.join(self.checkpoint_dir, "checkpoint.pt")) or os.path.exists(
-            os.path.join(self.checkpoint_dir, "checkpoint_.pt")
-        ):
+        if os.path.exists(
+            os.path.join(self.checkpoint_dir, "checkpoint.pt")
+        ) or os.path.exists(os.path.join(self.checkpoint_dir, "checkpoint_.pt")):
             checkpoint_path = os.path.join(self.checkpoint_dir, "checkpoint.pt")
             try:
                 self.resume_from_checkpoint(checkpoint_path)
             except Exception as e:
-                self.print_and_f_log(f"got error {e} when loading from {checkpoint_path}")
-                self.resume_from_checkpoint(os.path.join(self.checkpoint_dir, "checkpoint_.pt"))
+                self.print_and_f_log(
+                    f"got error {e} when loading from {checkpoint_path}"
+                )
+                self.resume_from_checkpoint(
+                    os.path.join(self.checkpoint_dir, "checkpoint_.pt")
+                )
         elif self.cfg.resume_path is not None:
             self.resume_from_checkpoint(self.cfg.resume_path)
         else:
@@ -294,10 +330,18 @@ class Trainer(Evaluator):
             loss.backward()
         # gradient clip
         if self.cfg.clip_grad is not None:
-            grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.clip_grad)
+            grad_norm = torch.nn.utils.clip_grad_norm_(
+                self.model.parameters(), self.cfg.clip_grad
+            )
         else:
             grad_norm = torch.norm(
-                torch.tensor([torch.norm(p.grad) for p in self.model.parameters() if p.grad is not None])
+                torch.tensor(
+                    [
+                        torch.norm(p.grad)
+                        for p in self.model.parameters()
+                        if p.grad is not None
+                    ]
+                )
             )
         info["grad_norm"] = grad_norm.item()
         # step
@@ -327,9 +371,12 @@ class Trainer(Evaluator):
         ) as t:
             if len(self.train_data_provider.train) * epoch != self.global_step:
                 self.print_and_f_log(
-                    f"skipping first {self.global_step-len(self.train_data_provider.train)*epoch} steps", flush=True
+                    f"skipping first {self.global_step - len(self.train_data_provider.train) * epoch} steps",
+                    flush=True,
                 )
-                self.train_data_provider.set_batch_idx(self.global_step - len(self.train_data_provider.train) * epoch)
+                self.train_data_provider.set_batch_idx(
+                    self.global_step - len(self.train_data_provider.train) * epoch
+                )
                 t.update(self.global_step - len(self.train_data_provider.train) * epoch)
             last_step_time = time.time()
             for _, (images, labels) in enumerate(self.train_data_provider.train):
@@ -341,14 +388,18 @@ class Trainer(Evaluator):
                 images = images.cuda()
                 labels = labels.cuda()
                 # forward
-                with torch.autocast(device_type="cuda", dtype=self.amp_dtype, enabled=self.enable_amp):
+                with torch.autocast(
+                    device_type="cuda", dtype=self.amp_dtype, enabled=self.enable_amp
+                ):
                     loss, info = self.model(images, labels)
                 # backward and update optimizer, lr_scheduler
                 after_step_dict = self.after_step(loss)
                 # update metrics
                 for loss_key, loss_value in info["loss_dict"].items():
                     if loss_key not in train_loss_dict:
-                        train_loss_dict[loss_key] = AverageMeter(is_distributed=is_dist_initialized())
+                        train_loss_dict[loss_key] = AverageMeter(
+                            is_distributed=is_dist_initialized()
+                        )
                     train_loss_dict[loss_key].update(loss_value, images.shape[0])
                     log_dict[loss_key] = loss_value
                 # tqdm
@@ -381,14 +432,22 @@ class Trainer(Evaluator):
                         if self.cfg.model in ["dit", "uvit"]:
                             network = self.ema.shadows[self.cfg.model]
                         else:
-                            raise NotImplementedError(f"evaluate ema is not supported for {self.cfg.model}")
+                            raise NotImplementedError(
+                                f"evaluate ema is not supported for {self.cfg.model}"
+                            )
                     else:
                         network = None
-                    valid_info_dict = self.evaluate(self.global_step, network=network, f_log=self.f_log)
-                    self.print_and_f_log(f"valid info dict: {valid_info_dict}\n", flush=True)
+                    valid_info_dict = self.evaluate(
+                        self.global_step, network=network, f_log=self.f_log
+                    )
+                    self.print_and_f_log(
+                        f"valid info dict: {valid_info_dict}\n", flush=True
+                    )
                     if self.cfg.compute_fid:
                         self.best_fid = min(valid_info_dict["fid"], self.best_fid)
-                    self.save_model(model_name=f"step_{self.global_step}.pt", epoch=epoch)
+                    self.save_model(
+                        model_name=f"step_{self.global_step}.pt", epoch=epoch
+                    )
                     log_dict.update(valid_info_dict)
                     self.model.train()
 
@@ -399,8 +458,13 @@ class Trainer(Evaluator):
                     self.save_model("checkpoint.pt", epoch)
                     self.log()
 
-                if self.cfg.max_steps is not None and self.global_step >= self.cfg.max_steps:
-                    self.print_and_f_log(f"max steps {self.cfg.max_steps} reached, breaking from train one epoch")
+                if (
+                    self.cfg.max_steps is not None
+                    and self.global_step >= self.cfg.max_steps
+                ):
+                    self.print_and_f_log(
+                        f"max steps {self.cfg.max_steps} reached, breaking from train one epoch"
+                    )
                     break
                 last_step_time = time.time()
         train_info_dict: dict[str, Any] = dict()
@@ -411,12 +475,19 @@ class Trainer(Evaluator):
     def train(self) -> None:
         for epoch in itertools.count(start=self.start_epoch):
             if self.cfg.num_epochs is not None and epoch >= self.cfg.num_epochs:
-                self.print_and_f_log(f"max epochs {self.cfg.num_epochs} reached, breaking from train")
+                self.print_and_f_log(
+                    f"max epochs {self.cfg.num_epochs} reached, breaking from train"
+                )
                 break
             train_info_dict = self.train_one_epoch(epoch, self.f_log)
             self.print_and_f_log(f"train info dict: {train_info_dict}\n", flush=True)
-            if self.cfg.max_steps is not None and self.global_step >= self.cfg.max_steps:
-                self.print_and_f_log(f"max steps {self.cfg.max_steps} reached, breaking from train")
+            if (
+                self.cfg.max_steps is not None
+                and self.global_step >= self.cfg.max_steps
+            ):
+                self.print_and_f_log(
+                    f"max steps {self.cfg.max_steps} reached, breaking from train"
+                )
                 break
             if self.NaN_detected:
                 self.print_and_f_log(f"NaN detected, breaking from train")

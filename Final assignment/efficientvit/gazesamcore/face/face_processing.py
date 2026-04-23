@@ -2,7 +2,11 @@ import time
 
 import numpy as np
 
-from efficientvit.gazesamcore.face.helpers import demo_postprocess, multiclass_nms, yolox_preprocess
+from efficientvit.gazesamcore.face.helpers import (
+    demo_postprocess,
+    multiclass_nms,
+    yolox_preprocess,
+)
 from efficientvit.gazesamcore.face.runtime_variants import (
     run_face_detection_model_onnx,
     run_face_detection_model_pytorch,
@@ -46,7 +50,12 @@ def detect_face(img, model, mode, timer=None, score_thr=0.5, input_shape=(160, 1
     dets = multiclass_nms(boxes_xyxy, scores, nms_thr=0.45, score_thr=score_thr)
     if dets is not None:
         final_boxes, final_scores = dets[:, :4], dets[:, 4]
-        return np.array([[*final_box, final_score] for final_box, final_score in zip(final_boxes, final_scores)])
+        return np.array(
+            [
+                [*final_box, final_score]
+                for final_box, final_score in zip(final_boxes, final_scores)
+            ]
+        )
     else:
         return None
 

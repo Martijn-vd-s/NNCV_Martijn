@@ -9,11 +9,22 @@ import wandb
 from tqdm import tqdm
 
 from efficientvit.apps.trainer import Trainer
-from efficientvit.apps.utils import AverageMeter, get_dist_local_rank, get_dist_size, is_master, sync_tensor
+from efficientvit.apps.utils import (
+    AverageMeter,
+    get_dist_local_rank,
+    get_dist_size,
+    is_master,
+    sync_tensor,
+)
 from efficientvit.models.utils import list_join
 from efficientvit.samcore.data_provider import SAMDataProvider
 from efficientvit.samcore.trainer import SAMRunConfig
-from efficientvit.samcore.trainer.utils import compute_boundary_iou, compute_iou, loss_masks, masks_sample_points
+from efficientvit.samcore.trainer.utils import (
+    compute_boundary_iou,
+    compute_iou,
+    loss_masks,
+    masks_sample_points,
+)
 
 __all__ = ["SAMTrainer"]
 
@@ -34,7 +45,9 @@ class SAMTrainer(Trainer):
         if is_master():
             self.wandb_log = wandb.init(project="efficientvit-sam")
 
-    def _validate(self, model, data_loader, epoch: int, sub_epoch: int) -> dict[str, Any]:
+    def _validate(
+        self, model, data_loader, epoch: int, sub_epoch: int
+    ) -> dict[str, Any]:
         val_loss = AverageMeter()
         val_iou = AverageMeter()
         val_iou_boundary = AverageMeter()
@@ -42,14 +55,18 @@ class SAMTrainer(Trainer):
         with torch.no_grad():
             with tqdm(
                 total=len(data_loader),
-                desc=f"Validate Epoch #{epoch + 1}, Sub Epoch #{sub_epoch+1}",
+                desc=f"Validate Epoch #{epoch + 1}, Sub Epoch #{sub_epoch + 1}",
                 disable=not is_master(),
                 file=sys.stdout,
             ) as t:
                 for _, data in enumerate(data_loader):
                     image = data["image"].cuda()
                     masks = data["masks"].cuda()
-                    bboxs = data["bboxs"].cuda() * 2 if image.shape[2] == 512 else data["bboxs"].cuda()
+                    bboxs = (
+                        data["bboxs"].cuda() * 2
+                        if image.shape[2] == 512
+                        else data["bboxs"].cuda()
+                    )
                     # points = data["points"].cuda() * 2 if image.shape[2] == 512 else data["points"].cuda()
 
                     bboxs[..., 2] = bboxs[..., 0] + bboxs[..., 2]
@@ -69,17 +86,25 @@ class SAMTrainer(Trainer):
                     _, M, _, _, _ = output.shape
                     output = torch.stack(
                         [
-                            output[k][torch.arange(M), iou_predictions[k].argmax(-1).squeeze()]
+                            output[k][
+                                torch.arange(M), iou_predictions[k].argmax(-1).squeeze()
+                            ]
                             for k in range(len(output))
                         ],
                         dim=0,
                     )
                     output = (
-                        F.interpolate(output, size=(image.shape[2], image.shape[3]), mode="bilinear")
+                        F.interpolate(
+                            output,
+                            size=(image.shape[2], image.shape[3]),
+                            mode="bilinear",
+                        )
                         .reshape(-1, image.shape[2], image.shape[3])
                         .unsqueeze(1)
                     )
-                    masks = masks.reshape(-1, image.shape[2], image.shape[3]).unsqueeze(1)
+                    masks = masks.reshape(-1, image.shape[2], image.shape[3]).unsqueeze(
+                        1
+                    )
 
                     loss_mask, loss_dice = loss_masks(output, masks, len(output))
                     loss = loss_mask * 20 + loss_dice
@@ -93,7 +118,9 @@ class SAMTrainer(Trainer):
 
                     val_loss.update(loss, image.shape[0] * get_dist_size())
                     val_iou.update(iou, image.shape[0] * get_dist_size())
-                    val_iou_boundary.update(boundary_iou, image.shape[0] * get_dist_size())
+                    val_iou_boundary.update(
+                        boundary_iou, image.shape[0] * get_dist_size()
+                    )
 
                     t.set_postfix(
                         {
@@ -107,7 +134,11 @@ class SAMTrainer(Trainer):
 
         if is_master():
             self.wandb_log.log(
-                {"val_loss": val_loss.avg, "val_iou": val_iou.avg, "val_boundary_iou": val_iou_boundary.avg}
+                {
+                    "val_loss": val_loss.avg,
+                    "val_iou": val_iou.avg,
+                    "val_boundary_iou": val_iou_boundary.avg,
+                }
             )
 
         return {
@@ -116,7 +147,9 @@ class SAMTrainer(Trainer):
             "val_boundary_iou": val_iou_boundary.avg,
         }
 
-    def validate(self, model=None, data_loader=None, epoch=0, sub_epoch=0) -> dict[str, Any]:
+    def validate(
+        self, model=None, data_loader=None, epoch=0, sub_epoch=0
+    ) -> dict[str, Any]:
         model = self.eval_network if model is None else model
         if data_loader is None:
             data_loader = self.data_provider.valid
@@ -127,8 +160,16 @@ class SAMTrainer(Trainer):
     def before_step(self, feed_dict: dict[str, Any]) -> dict[str, Any]:
         image = feed_dict["image"].cuda()
         masks = feed_dict["masks"].cuda()
-        bboxs = feed_dict["bboxs"].cuda() * 2 if image.shape[2] == 512 else feed_dict["bboxs"].cuda()
-        points = feed_dict["points"].cuda() * 2 if image.shape[2] == 512 else feed_dict["points"].cuda()
+        bboxs = (
+            feed_dict["bboxs"].cuda() * 2
+            if image.shape[2] == 512
+            else feed_dict["bboxs"].cuda()
+        )
+        points = (
+            feed_dict["points"].cuda() * 2
+            if image.shape[2] == 512
+            else feed_dict["points"].cuda()
+        )
 
         bboxs[..., 2] = bboxs[..., 0] + bboxs[..., 2]
         bboxs[..., 3] = bboxs[..., 1] + bboxs[..., 3]
@@ -159,13 +200,17 @@ class SAMTrainer(Trainer):
                     dict_input["point_coords"] = masks_sample_points(masks[b_i], k=n_p)
                     if image.shape[2] == 512:
                         dict_input["point_coords"] = dict_input["point_coords"] * 2
-                    dict_input["point_labels"] = torch.ones((points[b_i].shape[0], n_p), device=image.device)
+                    dict_input["point_labels"] = torch.ones(
+                        (points[b_i].shape[0], n_p), device=image.device
+                    )
                 except:
                     dict_input["boxes"] = bboxs[b_i]
 
             batched_input.append(dict_input)
 
-        with torch.autocast(device_type="cuda", dtype=self.amp_dtype, enabled=self.enable_amp):
+        with torch.autocast(
+            device_type="cuda", dtype=self.amp_dtype, enabled=self.enable_amp
+        ):
             if random.random() >= 0.5:
                 output, _ = self.model(batched_input, multimask_output=True)
             else:
@@ -176,11 +221,17 @@ class SAMTrainer(Trainer):
             loss_list = []
             for i in range(output.shape[2]):
                 output_i = (
-                    F.interpolate(output[:, :, i], size=(image.shape[2], image.shape[3]), mode="bilinear")
+                    F.interpolate(
+                        output[:, :, i],
+                        size=(image.shape[2], image.shape[3]),
+                        mode="bilinear",
+                    )
                     .reshape(-1, image.shape[2], image.shape[3])
                     .unsqueeze(1)
                 )
-                loss_mask_i, loss_dice_i = loss_masks(output_i, masks, len(output_i), mode="none")
+                loss_mask_i, loss_dice_i = loss_masks(
+                    output_i, masks, len(output_i), mode="none"
+                )
                 loss_i = loss_mask_i * 20 + loss_dice_i
                 loss_list.append(loss_i)
             loss = torch.stack(loss_list, -1)
@@ -226,7 +277,14 @@ class SAMTrainer(Trainer):
                             "train_loss": train_loss.avg,
                             "epoch": epoch,
                             "sub_epoch": sub_epoch,
-                            "learning_rate": sorted(set([group["lr"] for group in self.optimizer.param_groups]))[0],
+                            "learning_rate": sorted(
+                                set(
+                                    [
+                                        group["lr"]
+                                        for group in self.optimizer.param_groups
+                                    ]
+                                )
+                            )[0],
                         }
                     )
 
@@ -236,7 +294,14 @@ class SAMTrainer(Trainer):
                         "bs": data["image"].shape[0] * get_dist_size(),
                         "res": data["image"].shape[2],
                         "lr": list_join(
-                            sorted(set([group["lr"] for group in self.optimizer.param_groups])),
+                            sorted(
+                                set(
+                                    [
+                                        group["lr"]
+                                        for group in self.optimizer.param_groups
+                                    ]
+                                )
+                            ),
                             "#",
                             "%.1E",
                         ),

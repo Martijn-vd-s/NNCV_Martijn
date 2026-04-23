@@ -79,12 +79,16 @@ class ClsTrainer(Trainer):
         labels = feed_dict["label"].cuda()
 
         # label smooth
-        labels = label_smooth(labels, self.data_provider.n_classes, self.run_config.label_smooth)
+        labels = label_smooth(
+            labels, self.data_provider.n_classes, self.run_config.label_smooth
+        )
 
         # mixup
         if self.run_config.mixup_config is not None:
             # choose active mixup config
-            mix_weight_list = [mix_list[2] for mix_list in self.run_config.mixup_config["op"]]
+            mix_weight_list = [
+                mix_list[2] for mix_list in self.run_config.mixup_config["op"]
+            ]
             active_id = torch_random_choices(
                 list(range(len(self.run_config.mixup_config["op"]))),
                 weight_list=mix_weight_list,
@@ -93,7 +97,9 @@ class ClsTrainer(Trainer):
             active_mixup_config = self.run_config.mixup_config["op"][active_id]
             mixup_type, mixup_alpha = active_mixup_config[:2]
 
-            lam = float(torch.distributions.beta.Beta(mixup_alpha, mixup_alpha).sample())
+            lam = float(
+                torch.distributions.beta.Beta(mixup_alpha, mixup_alpha).sample()
+            )
             lam = float(np.clip(lam, 0, 1))
             lam = float(sync_tensor(lam, reduce="root"))
 
@@ -109,7 +115,10 @@ class ClsTrainer(Trainer):
         labels = feed_dict["label"]
 
         # setup mesa
-        if self.run_config.mesa is not None and self.run_config.mesa["thresh"] <= self.run_config.progress:
+        if (
+            self.run_config.mesa is not None
+            and self.run_config.mesa["thresh"] <= self.run_config.progress
+        ):
             ema_model = self.ema.shadows
             with torch.inference_mode():
                 ema_output = ema_model(images).detach()
@@ -118,7 +127,9 @@ class ClsTrainer(Trainer):
         else:
             ema_output = None
 
-        with torch.autocast(device_type="cuda", dtype=self.amp_dtype, enabled=self.enable_amp):
+        with torch.autocast(
+            device_type="cuda", dtype=self.amp_dtype, enabled=self.enable_amp
+        ):
             output = self.model(images)
             loss = self.train_criterion(output, labels)
             # mesa loss
@@ -172,7 +183,9 @@ class ClsTrainer(Trainer):
                     "bs": images.shape[0],
                     "res": images.shape[2],
                     "lr": list_join(
-                        sorted(set([group["lr"] for group in self.optimizer.param_groups])),
+                        sorted(
+                            set([group["lr"] for group in self.optimizer.param_groups])
+                        ),
                         "#",
                         "%.1E",
                     ),
@@ -191,17 +204,23 @@ class ClsTrainer(Trainer):
         else:
             self.train_criterion = nn.CrossEntropyLoss()
 
-        for epoch in range(self.start_epoch, self.run_config.n_epochs + self.run_config.warmup_epochs):
+        for epoch in range(
+            self.start_epoch, self.run_config.n_epochs + self.run_config.warmup_epochs
+        ):
             train_info_dict = self.train_one_epoch(epoch)
             # eval
             val_info_dict = self.multires_validate(epoch=epoch)
-            avg_top1 = list_mean([info_dict["val_top1"] for info_dict in val_info_dict.values()])
+            avg_top1 = list_mean(
+                [info_dict["val_top1"] for info_dict in val_info_dict.values()]
+            )
             is_best = avg_top1 > self.best_val
             self.best_val = max(avg_top1, self.best_val)
 
             if self.auto_restart_thresh is not None:
                 if self.best_val - avg_top1 > self.auto_restart_thresh:
-                    self.write_log(f"Abnormal accuracy drop: {self.best_val} -> {avg_top1}")
+                    self.write_log(
+                        f"Abnormal accuracy drop: {self.best_val} -> {avg_top1}"
+                    )
                     self.load_model(os.path.join(self.checkpoint_path, "model_best.pt"))
                     return self.train(trials + 1, save_freq)
 
@@ -216,13 +235,13 @@ class ClsTrainer(Trainer):
             val_log += ")\tTrain("
             for key, val in train_info_dict.items():
                 val_log += f"{key}={val:.2E},"
-            val_log += (
-                f'lr={list_join(sorted(set([group["lr"] for group in self.optimizer.param_groups])), "#", "%.1E")})'
-            )
+            val_log += f"lr={list_join(sorted(set([group['lr'] for group in self.optimizer.param_groups])), '#', '%.1E')})"
             self.write_log(val_log, prefix="valid", print_log=False)
 
             # save model
-            if (epoch + 1) % save_freq == 0 or (is_best and self.run_config.progress > 0.8):
+            if (epoch + 1) % save_freq == 0 or (
+                is_best and self.run_config.progress > 0.8
+            ):
                 self.save_model(
                     only_state_dict=False,
                     epoch=epoch,

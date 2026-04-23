@@ -57,7 +57,10 @@ def annotate_frame(
     if best_mask is not None:
         frame = draw_mask(frame, best_mask)
         # draw gaze line
-        box_midpoint = (best_bbox[0] + best_bbox[2]) // 2, (best_bbox[1] + best_bbox[3]) // 2
+        box_midpoint = (
+            (best_bbox[0] + best_bbox[2]) // 2,
+            (best_bbox[1] + best_bbox[3]) // 2,
+        )
         h, w, _ = frame.shape
         endpoint = find_edge_intersection(w, h, gaze_head, box_midpoint)
         cv2.line(frame, gaze_head, endpoint, GREY, 2)
@@ -67,12 +70,17 @@ def annotate_frame(
 
 
 # when presented with no bboxes for this frame, use prev mask and bbox
-def annotate_blank_frame(frame, gaze_head, gaze_tail, saved_mask, saved_bbox, runtime, webcam):
+def annotate_blank_frame(
+    frame, gaze_head, gaze_tail, saved_mask, saved_bbox, runtime, webcam
+):
     # As PyTorch and ONNX modes are slower, webcam FPS will not be real time, thus saved masks
     # may not fit well
     if saved_mask is not None and (not webcam or runtime == TENSORRT):
         frame = draw_mask(frame, saved_mask)
-        box_midpoint = (saved_bbox[0] + saved_bbox[2]) // 2, (saved_bbox[1] + saved_bbox[3]) // 2
+        box_midpoint = (
+            (saved_bbox[0] + saved_bbox[2]) // 2,
+            (saved_bbox[1] + saved_bbox[3]) // 2,
+        )
         h, w, _ = frame.shape
         endpoint = find_edge_intersection(w, h, gaze_head, box_midpoint)
         cv2.line(frame, gaze_head, endpoint, GREY, 2)

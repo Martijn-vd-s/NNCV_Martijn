@@ -7,7 +7,13 @@ from PIL import Image
 from torch.utils.data.dataset import Dataset
 from torchvision.datasets import ImageFolder
 
-__all__ = ["load_image", "load_image_from_dir", "DMCrop", "CustomImageFolder", "ImageDataset"]
+__all__ = [
+    "load_image",
+    "load_image_from_dir",
+    "DMCrop",
+    "CustomImageFolder",
+    "ImageDataset",
+]
 
 
 def load_image(data_path: str, mode="rgb") -> Image.Image:
@@ -74,19 +80,27 @@ class DMCrop:
             return pil_image
 
         while min(*pil_image.size) >= 2 * image_size:
-            pil_image = pil_image.resize(tuple(x // 2 for x in pil_image.size), resample=Image.BOX)
+            pil_image = pil_image.resize(
+                tuple(x // 2 for x in pil_image.size), resample=Image.BOX
+            )
 
         scale = image_size / min(*pil_image.size)
-        pil_image = pil_image.resize(tuple(round(x * scale) for x in pil_image.size), resample=Image.BICUBIC)
+        pil_image = pil_image.resize(
+            tuple(round(x * scale) for x in pil_image.size), resample=Image.BICUBIC
+        )
 
         arr = np.array(pil_image)
         crop_y = (arr.shape[0] - image_size) // 2
         crop_x = (arr.shape[1] - image_size) // 2
-        return Image.fromarray(arr[crop_y : crop_y + image_size, crop_x : crop_x + image_size])
+        return Image.fromarray(
+            arr[crop_y : crop_y + image_size, crop_x : crop_x + image_size]
+        )
 
 
 class CustomImageFolder(ImageFolder):
-    def __init__(self, root: str, transform: Optional[Callable] = None, return_dict: bool = False):
+    def __init__(
+        self, root: str, transform: Optional[Callable] = None, return_dict: bool = False
+    ):
         root = os.path.expanduser(root)
         self.return_dict = return_dict
         super().__init__(root, transform)

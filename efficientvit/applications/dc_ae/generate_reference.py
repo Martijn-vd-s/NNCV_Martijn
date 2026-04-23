@@ -10,7 +10,10 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(os.path.dirname(BASE_DIR))
 sys.path.append(ROOT_DIR)
 
-from efficientvit.aecore.data_provider.imagenet import ImageNetDataProvider, ImageNetDataProviderConfig
+from efficientvit.aecore.data_provider.imagenet import (
+    ImageNetDataProvider,
+    ImageNetDataProviderConfig,
+)
 from efficientvit.apps.metrics.fid.fid import FIDStats, FIDStatsConfig
 from efficientvit.apps.utils.dist import dist_init, get_dist_local_rank, is_master
 
@@ -22,13 +25,17 @@ class GenerateReferenceConfig:
 
     # dataset
     dataset: str = MISSING
-    imagenet: ImageNetDataProviderConfig = field(default_factory=ImageNetDataProviderConfig)
+    imagenet: ImageNetDataProviderConfig = field(
+        default_factory=ImageNetDataProviderConfig
+    )
 
 
 def main():
     default_cfg = OmegaConf.structured(GenerateReferenceConfig)
     cli_cfg = OmegaConf.from_cli()
-    cfg: GenerateReferenceConfig = OmegaConf.to_object(OmegaConf.merge(default_cfg, cli_cfg))
+    cfg: GenerateReferenceConfig = OmegaConf.to_object(
+        OmegaConf.merge(default_cfg, cli_cfg)
+    )
 
     dist_init()
     torch.backends.cudnn.deterministic = True

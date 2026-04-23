@@ -24,7 +24,9 @@ def run_export(
     return_single_mask: bool,
 ):
     print("Loading model...")
-    efficientvit_sam = create_efficientvit_sam_model(model_type, True, checkpoint).eval()
+    efficientvit_sam = create_efficientvit_sam_model(
+        model_type, True, checkpoint
+    ).eval()
 
     onnx_model = EvitSAMBoxDecoder(
         model=efficientvit_sam,

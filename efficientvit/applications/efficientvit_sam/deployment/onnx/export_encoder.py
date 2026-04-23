@@ -32,11 +32,15 @@ class SamResize:
         Expects a torch tensor with shape HxWxC in float format.
         """
 
-        target_size = self.get_preprocess_shape(image.shape[0], image.shape[1], self.size)
+        target_size = self.get_preprocess_shape(
+            image.shape[0], image.shape[1], self.size
+        )
         return resize(image.permute(2, 0, 1), target_size)
 
     @staticmethod
-    def get_preprocess_shape(oldh: int, oldw: int, long_side_length: int) -> tuple[int, int]:
+    def get_preprocess_shape(
+        oldh: int, oldw: int, long_side_length: int
+    ) -> tuple[int, int]:
         """
         Compute the output size given input size and target long side length.
         """
@@ -83,7 +87,11 @@ def run_export(
     else:
         raise NotImplementedError
 
-    dummy_input = {"input_image": torch.randn((1, 3, image_size[0], image_size[1]), dtype=torch.float)}
+    dummy_input = {
+        "input_image": torch.randn(
+            (1, 3, image_size[0], image_size[1]), dtype=torch.float
+        )
+    }
     dynamic_axes = {
         "input_image": {0: "batch_size"},
     }
@@ -118,8 +126,18 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str)
     parser.add_argument("--weight_url", type=str)
-    parser.add_argument("--output", type=str, required=True, help="The filename to save the onnx model to.")
-    parser.add_argument("--opset", type=int, default=17, help="The ONNX opset version to use. Must be >=11.")
+    parser.add_argument(
+        "--output",
+        type=str,
+        required=True,
+        help="The filename to save the onnx model to.",
+    )
+    parser.add_argument(
+        "--opset",
+        type=int,
+        default=17,
+        help="The ONNX opset version to use. Must be >=11.",
+    )
     args = parser.parse_args()
 
     run_export(

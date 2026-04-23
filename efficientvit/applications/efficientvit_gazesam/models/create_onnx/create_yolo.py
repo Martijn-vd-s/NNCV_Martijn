@@ -34,6 +34,8 @@ onnx_model = models.get(model, pretrained_weights="coco")
 
 # need different version because the trt version includes an NMS TRT plugin node
 if args.runtime == "trt":
-    onnx_model.export(f"onnx/yolo_{args.model_size}.onnx", engine=ExportTargetBackend.TENSORRT)
+    onnx_model.export(
+        f"onnx/yolo_{args.model_size}.onnx", engine=ExportTargetBackend.TENSORRT
+    )
 elif args.runtime == "onnx":
     onnx_model.export(f"onnx/yolo_{args.model_size}_ort.onnx")

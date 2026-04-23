@@ -2,7 +2,11 @@ import numpy as np
 import onnxruntime as ort
 import torch
 
-__all__ = ["run_face_detection_model_pytorch", "run_face_detection_model_onnx", "run_face_detection_model_trt"]
+__all__ = [
+    "run_face_detection_model_pytorch",
+    "run_face_detection_model_onnx",
+    "run_face_detection_model_trt",
+]
 
 
 @torch.inference_mode()

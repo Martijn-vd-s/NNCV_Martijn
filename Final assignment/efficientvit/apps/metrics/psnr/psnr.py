@@ -12,7 +12,9 @@ class PSNRStatsConfig:
     pass
 
 
-def compute_psnr(image_ref: torch.Tensor, image_pred: torch.Tensor, max_pixel: float = 255.0) -> torch.Tensor:
+def compute_psnr(
+    image_ref: torch.Tensor, image_pred: torch.Tensor, max_pixel: float = 255.0
+) -> torch.Tensor:
     """
     image_ref : (B, 3, H, W) uint8
     image_pred: (B, 3, H, W) uint8

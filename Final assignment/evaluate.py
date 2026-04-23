@@ -5,20 +5,25 @@ import torch
 from torch.utils.data import DataLoader
 from torchvision.datasets import Cityscapes
 from torchvision.transforms.v2 import (
-    Compose, Normalize, Resize, ToImage, ToDtype, InterpolationMode,
+    Compose,
+    Normalize,
+    Resize,
+    ToImage,
+    ToDtype,
+    InterpolationMode,
 )
 from model import Model
 import torch.nn.functional as F
 
 
 CATEGORY_MAPPING = {
-    "Flat":         [0, 1],
+    "Flat": [0, 1],
     "Construction": [2, 3, 4],
-    "Object":       [5, 6, 7],
-    "Nature":       [8, 9],
-    "Sky":          [10],
-    "Human":        [11, 12],
-    "Vehicle":      [13, 14, 15, 16, 17, 18],
+    "Object": [5, 6, 7],
+    "Nature": [8, 9],
+    "Sky": [10],
+    "Human": [11, 12],
+    "Vehicle": [13, 14, 15, 16, 17, 18],
 }
 
 
@@ -34,6 +39,7 @@ def compute_efficiency_metrics(model, device, input_size=(1, 3, 1024, 2048)):
     # GFLOPs via fvcore (same tool the CodaLab server uses)
     try:
         from fvcore.nn import FlopCountAnalysis
+
         model.eval()
         with torch.no_grad():
             flops = FlopCountAnalysis(model, dummy)
@@ -56,17 +62,16 @@ def compute_efficiency_metrics(model, device, input_size=(1, 3, 1024, 2048)):
         fps = 30 / (time.time() - t0)
 
     # Model size in MB (parameters + buffers)
-    param_bytes  = sum(p.numel() * p.element_size() for p in model.parameters())
+    param_bytes = sum(p.numel() * p.element_size() for p in model.parameters())
     buffer_bytes = sum(b.numel() * b.element_size() for b in model.buffers())
     size_mb = (param_bytes + buffer_bytes) / 1e6
 
     return gflops, fps, size_mb
 
 
-
 def sliding_window_inference(
     model, image_tensor, window_size=(512, 1024), stride_rate=0.5
-    ):
+):
     device = image_tensor.device
     B, _, H, W = image_tensor.shape
     w_h, w_w = window_size
@@ -111,36 +116,49 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Evaluating on {device}...")
 
-    img_transform = Compose([
-        ToImage(),
-        Resize((512, 1024), interpolation=InterpolationMode.BILINEAR),
-        ToDtype(torch.float32, scale=True),
-        Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-    ])
-    target_transform = Compose([
-        ToImage(),
-        Resize((512, 1024), interpolation=InterpolationMode.NEAREST),
-        ToDtype(torch.int64),
-    ])
+    img_transform = Compose(
+        [
+            ToImage(),
+            Resize((512, 1024), interpolation=InterpolationMode.BILINEAR),
+            ToDtype(torch.float32, scale=True),
+            Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+        ]
+    )
+    target_transform = Compose(
+        [
+            ToImage(),
+            Resize((512, 1024), interpolation=InterpolationMode.NEAREST),
+            ToDtype(torch.int64),
+        ]
+    )
 
     val_dataset = Cityscapes(
-        root="./data/cityscapes", split="val", mode="fine",
+        root="./data/cityscapes",
+        split="val",
+        mode="fine",
         target_type="semantic",
-        transform=img_transform, target_transform=target_transform,
+        transform=img_transform,
+        target_transform=target_transform,
     )
 
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=10)
 
     model = Model(in_channels=3, n_classes=19, dino_fine_tune=False).to(device)
 
-    checkpoint_path = "checkpoints/eff + unet-training V3/best_model-epoch=0034-val_loss=1.2444.pt"
-    model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
+    checkpoint_path = (
+        "checkpoints/eff + unet-training V3/best_model-epoch=0034-val_loss=1.2444.pt"
+    )
+    model.load_state_dict(
+        torch.load(checkpoint_path, map_location=device, weights_only=True)
+    )
     model.eval()
     print(f"Loaded checkpoint: {checkpoint_path}")
 
     # compute efficiency metrics first (server uses 1024x2048 for FLOP counting)
     print("\nComputing efficiency metrics...")
-    gflops, fps, size_mb = compute_efficiency_metrics(model, device, input_size=(1, 3, 1024, 2048))
+    gflops, fps, size_mb = compute_efficiency_metrics(
+        model, device, input_size=(1, 3, 1024, 2048)
+    )
     tflops = gflops / 1000 if gflops else None
 
     print(f"  Model size : {size_mb:.2f} MB")
@@ -155,9 +173,15 @@ def main():
     print("\nRunning inference on full validation set...")
     with torch.no_grad():
         from tqdm import tqdm
+
         for images, labels in tqdm(val_loader, desc="Evaluating"):
             images = images.to(device)
-            labels = labels.apply_(lambda x: id_to_trainid.get(x, 255)).long().squeeze(1).to(device)
+            labels = (
+                labels.apply_(lambda x: id_to_trainid.get(x, 255))
+                .long()
+                .squeeze(1)
+                .to(device)
+            )
 
             with torch.autocast(device_type=device.type, dtype=torch.bfloat16):
                 outputs = model(images)
@@ -171,7 +195,7 @@ def main():
     fn = hist.sum(dim=1) - tp
 
     results = {}
-    total_iou  = 0.0
+    total_iou = 0.0
     total_dice = 0.0
 
     for cat_name, class_ids in CATEGORY_MAPPING.items():
@@ -179,24 +203,32 @@ def main():
         cat_fp = fp[class_ids].sum().item()
         cat_fn = fn[class_ids].sum().item()
 
-        iou  = cat_tp / (cat_tp + cat_fp + cat_fn) if (cat_tp + cat_fp + cat_fn) > 0 else 0.0
-        dice = (2 * cat_tp) / (2 * cat_tp + cat_fp + cat_fn) if (2 * cat_tp + cat_fp + cat_fn) > 0 else 0.0
+        iou = (
+            cat_tp / (cat_tp + cat_fp + cat_fn)
+            if (cat_tp + cat_fp + cat_fn) > 0
+            else 0.0
+        )
+        dice = (
+            (2 * cat_tp) / (2 * cat_tp + cat_fp + cat_fn)
+            if (2 * cat_tp + cat_fp + cat_fn) > 0
+            else 0.0
+        )
 
         results[f"Dice_{cat_name}"] = round(dice, 4)
-        results[f"IoU_{cat_name}"]  = round(iou,  4)
-        total_iou  += iou
+        results[f"IoU_{cat_name}"] = round(iou, 4)
+        total_iou += iou
         total_dice += dice
 
-    results["MeanDice"]   = round(total_dice / len(CATEGORY_MAPPING), 4)
-    results["MeanIoU"]    = round(total_iou  / len(CATEGORY_MAPPING), 4)
+    results["MeanDice"] = round(total_dice / len(CATEGORY_MAPPING), 4)
+    results["MeanIoU"] = round(total_iou / len(CATEGORY_MAPPING), 4)
     results["NumSamples"] = len(val_dataset)
 
     # efficiency score
     if tflops:
-        results["GFLOPs"]     = round(gflops, 4)
-        results["TFLOPs"]     = round(tflops, 6)
-        results["FPS"]        = round(fps, 2)
-        results["ModelSizeMB"]= round(size_mb, 2)
+        results["GFLOPs"] = round(gflops, 4)
+        results["TFLOPs"] = round(tflops, 6)
+        results["FPS"] = round(fps, 2)
+        results["ModelSizeMB"] = round(size_mb, 2)
         results["Efficiency_Dice_per_TFLOPs"] = round(results["MeanDice"] / tflops, 4)
 
     print("\n--- Final Metrics ---")

@@ -4,7 +4,10 @@ from dataclasses import dataclass
 from torch.utils.data import Dataset
 from torchvision.datasets import ImageFolder
 
-from efficientvit.aecore.data_provider.base import BaseDataProvider, BaseDataProviderConfig
+from efficientvit.aecore.data_provider.base import (
+    BaseDataProvider,
+    BaseDataProviderConfig,
+)
 
 __all__ = ["ImageNetDataProviderConfig", "ImageNetDataProvider"]
 

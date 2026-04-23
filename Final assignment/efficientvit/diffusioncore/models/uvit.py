@@ -12,7 +12,10 @@ import torch.utils.checkpoint
 from timm.models.vision_transformer import Mlp, trunc_normal_
 
 from efficientvit.apps.utils.dist import is_master
-from efficientvit.diffusioncore.models.uvit_sampler.dpm_solver_pp import DPM_Solver, NoiseScheduleVP
+from efficientvit.diffusioncore.models.uvit_sampler.dpm_solver_pp import (
+    DPM_Solver,
+    NoiseScheduleVP,
+)
 from efficientvit.models.utils.network import get_device, get_submodule_weights
 
 from .sit_sampler import Sampler as SiTSampler
@@ -38,9 +41,11 @@ def timestep_embedding(timesteps, dim, max_period=10000):
     :return: an [N x dim] Tensor of positional embeddings.
     """
     half = dim // 2
-    freqs = torch.exp(-math.log(max_period) * torch.arange(start=0, end=half, dtype=torch.float32) / half).to(
-        device=timesteps.device
-    )
+    freqs = torch.exp(
+        -math.log(max_period)
+        * torch.arange(start=0, end=half, dtype=torch.float32)
+        / half
+    ).to(device=timesteps.device)
     args = timesteps[:, None].float() * freqs[None]
     embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
     if dim % 2:
@@ -49,20 +54,33 @@ def timestep_embedding(timesteps, dim, max_period=10000):
 
 
 def patchify(imgs, patch_size):
-    x = einops.rearrange(imgs, "B C (h p1) (w p2) -> B (h w) (p1 p2 C)", p1=patch_size, p2=patch_size)
+    x = einops.rearrange(
+        imgs, "B C (h p1) (w p2) -> B (h w) (p1 p2 C)", p1=patch_size, p2=patch_size
+    )
     return x
 
 
 def unpatchify(x, channels=3):
     patch_size = int((x.shape[2] // channels) ** 0.5)
     h = w = int(x.shape[1] ** 0.5)
-    assert h * w == x.shape[1] and patch_size ** 2 * channels == x.shape[2]
-    x = einops.rearrange(x, "B (h w) (p1 p2 C) -> B C (h p1) (w p2)", h=h, p1=patch_size, p2=patch_size)
+    assert h * w == x.shape[1] and patch_size**2 * channels == x.shape[2]
+    x = einops.rearrange(
+        x, "B (h w) (p1 p2 C) -> B C (h p1) (w p2)", h=h, p1=patch_size, p2=patch_size
+    )
     return x
 
 
 class Attention(nn.Module):
-    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0.0, proj_drop=0.0, proj_bias=True):
+    def __init__(
+        self,
+        dim,
+        num_heads=8,
+        qkv_bias=False,
+        qk_scale=None,
+        attn_drop=0.0,
+        proj_drop=0.0,
+        proj_bias=True,
+    ):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
@@ -78,12 +96,16 @@ class Attention(nn.Module):
 
         qkv = self.qkv(x)
         if ATTENTION_MODE == "flash":
-            qkv = einops.rearrange(qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads).float()
+            qkv = einops.rearrange(
+                qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads
+            ).float()
             q, k, v = qkv[0], qkv[1], qkv[2]  # B H L D
             x = torch.nn.functional.scaled_dot_product_attention(q, k, v)
             x = einops.rearrange(x, "B H L D -> B L (H D)")
         elif ATTENTION_MODE == "math":
-            qkv = einops.rearrange(qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads)
+            qkv = einops.rearrange(
+                qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads
+            )
             q, k, v = qkv[0], qkv[1], qkv[2]  # B H L D
             attn = (q @ k.transpose(-2, -1)) * self.scale
             attn = attn.softmax(dim=-1)
@@ -113,9 +135,13 @@ class Block(nn.Module):
         super().__init__()
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.norm1 = norm_layer(dim)
-        self.attn = Attention(dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale)
+        self.attn = Attention(
+            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale
+        )
         self.norm2 = norm_layer(dim)
-        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer)
+        self.mlp = Mlp(
+            in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer
+        )
         self.skip_linear = nn.Linear(2 * dim, dim) if skip else None
         self.use_checkpoint = use_checkpoint
 
@@ -139,7 +165,9 @@ class PatchEmbed(nn.Module):
     def __init__(self, patch_size, in_chans=3, embed_dim=768):
         super().__init__()
         self.patch_size = patch_size
-        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+        self.proj = nn.Conv2d(
+            in_chans, embed_dim, kernel_size=patch_size, stride=patch_size
+        )
 
     def forward(self, x):
         B, C, H, W = x.shape
@@ -156,7 +184,9 @@ class LabelEmbedder(nn.Module):
     def __init__(self, num_classes, hidden_size, dropout_prob):
         super().__init__()
         use_cfg_embedding = dropout_prob > 0
-        self.embedding_table = nn.Embedding(num_classes + use_cfg_embedding, hidden_size)
+        self.embedding_table = nn.Embedding(
+            num_classes + use_cfg_embedding, hidden_size
+        )
         self.num_classes = num_classes
         self.dropout_prob = dropout_prob
 
@@ -165,7 +195,9 @@ class LabelEmbedder(nn.Module):
         Drops labels to enable classifier-free guidance.
         """
         if force_drop_ids is None:
-            drop_ids = torch.rand(labels.shape[0], device=labels.device) < self.dropout_prob
+            drop_ids = (
+                torch.rand(labels.shape[0], device=labels.device) < self.dropout_prob
+            )
         else:
             drop_ids = force_drop_ids == 1
         labels = torch.where(drop_ids, self.num_classes, labels)
@@ -273,7 +305,11 @@ class UViT(nn.Module):
         if is_master():
             print(f"attention mode is {ATTENTION_MODE}")
 
-        self.patch_embed = PatchEmbed(patch_size=cfg.patch_size, in_chans=cfg.in_channels, embed_dim=cfg.hidden_size)
+        self.patch_embed = PatchEmbed(
+            patch_size=cfg.patch_size,
+            in_chans=cfg.in_channels,
+            embed_dim=cfg.hidden_size,
+        )
         num_patches = (cfg.input_size // cfg.patch_size) ** 2
 
         self.time_embed = (
@@ -294,7 +330,9 @@ class UViT(nn.Module):
         else:
             self.extras = 1
 
-        self.pos_embed = nn.Parameter(torch.zeros(1, self.extras + num_patches, cfg.hidden_size))
+        self.pos_embed = nn.Parameter(
+            torch.zeros(1, self.extras + num_patches, cfg.hidden_size)
+        )
 
         if cfg.act_layer == "gelu":
             act_layer = nn.GELU
@@ -360,16 +398,26 @@ class UViT(nn.Module):
 
         # scheduler
         if cfg.train_scheduler == "DPM_Solver":
-            _betas = (torch.linspace(0.00085**0.5, 0.0120**0.5, 1000, dtype=torch.float64) ** 2).numpy()
+            _betas = (
+                torch.linspace(0.00085**0.5, 0.0120**0.5, 1000, dtype=torch.float64)
+                ** 2
+            ).numpy()
             self.train_scheduler = UViTSchedule(_betas)
         elif cfg.train_scheduler == "SiTSampler":
-            self.transport = sit_create_transport("Linear", "velocity", None, None, None)
+            self.transport = sit_create_transport(
+                "Linear", "velocity", None, None, None
+            )
         else:
-            raise NotImplementedError(f"train_scheduler {cfg.train_scheduler} is not supported")
+            raise NotImplementedError(
+                f"train_scheduler {cfg.train_scheduler} is not supported"
+            )
 
         if cfg.eval_scheduler == "DPM_Solver":
             device = torch.device("cuda")
-            _betas = (torch.linspace(0.00085**0.5, 0.0120**0.5, 1000, dtype=torch.float64) ** 2).numpy()
+            _betas = (
+                torch.linspace(0.00085**0.5, 0.0120**0.5, 1000, dtype=torch.float64)
+                ** 2
+            ).numpy()
             self.eval_scheduler = NoiseScheduleVP(
                 schedule="discrete", betas=torch.tensor(_betas, device=device).float()
             )
@@ -378,16 +426,28 @@ class UViT(nn.Module):
             sampler = SiTSampler(self.transport)
             if cfg.eval_scheduler == "ODE_dopri5":
                 self.eval_scheduler = sampler.sample_ode(
-                    sampling_method="dopri5", num_steps=cfg.num_inference_steps, atol=1e-6, rtol=0.001, reverse=False
+                    sampling_method="dopri5",
+                    num_steps=cfg.num_inference_steps,
+                    atol=1e-6,
+                    rtol=0.001,
+                    reverse=False,
                 )
             elif cfg.eval_scheduler == "ODE_heun2":
                 self.eval_scheduler = sampler.sample_ode(
-                    sampling_method="heun2", num_steps=cfg.num_inference_steps, atol=1e-6, rtol=0.001, reverse=False
+                    sampling_method="heun2",
+                    num_steps=cfg.num_inference_steps,
+                    atol=1e-6,
+                    rtol=0.001,
+                    reverse=False,
                 )
             else:
-                raise ValueError(f"eval scheduler {cfg.eval_scheduler} is not supported")
+                raise ValueError(
+                    f"eval scheduler {cfg.eval_scheduler} is not supported"
+                )
         else:
-            raise NotImplementedError(f"eval_scheduler {cfg.eval_scheduler} is not supported")
+            raise NotImplementedError(
+                f"eval_scheduler {cfg.eval_scheduler} is not supported"
+            )
 
     def get_trainable_modules(self) -> nn.ModuleDict:
         return nn.ModuleDict({"uvit": self})
@@ -397,22 +457,40 @@ class UViT(nn.Module):
         if self.cfg.pretrained_source == "uvit":
             if "ema" in checkpoint:
                 checkpoint = checkpoint["ema"]
-            self.patch_embed.load_state_dict(get_submodule_weights(checkpoint, "patch_embed."))
-            self.time_embed.load_state_dict(get_submodule_weights(checkpoint, "time_embed."))
+            self.patch_embed.load_state_dict(
+                get_submodule_weights(checkpoint, "patch_embed.")
+            )
+            self.time_embed.load_state_dict(
+                get_submodule_weights(checkpoint, "time_embed.")
+            )
             if self.cfg.num_classes > 0:
-                self.label_emb.embedding_table.load_state_dict(get_submodule_weights(checkpoint, "label_emb."))
+                self.label_emb.embedding_table.load_state_dict(
+                    get_submodule_weights(checkpoint, "label_emb.")
+                )
             self.pos_embed.data = checkpoint["pos_embed"]
-            self.in_blocks.load_state_dict(get_submodule_weights(checkpoint, "in_blocks."))
-            self.mid_block.load_state_dict(get_submodule_weights(checkpoint, "mid_block."))
-            self.out_blocks.load_state_dict(get_submodule_weights(checkpoint, "out_blocks."))
+            self.in_blocks.load_state_dict(
+                get_submodule_weights(checkpoint, "in_blocks.")
+            )
+            self.mid_block.load_state_dict(
+                get_submodule_weights(checkpoint, "mid_block.")
+            )
+            self.out_blocks.load_state_dict(
+                get_submodule_weights(checkpoint, "out_blocks.")
+            )
             self.norm.load_state_dict(get_submodule_weights(checkpoint, "norm."))
-            self.decoder_pred.load_state_dict(get_submodule_weights(checkpoint, "decoder_pred."))
-            self.final_layer.load_state_dict(get_submodule_weights(checkpoint, "final_layer."))
+            self.decoder_pred.load_state_dict(
+                get_submodule_weights(checkpoint, "decoder_pred.")
+            )
+            self.final_layer.load_state_dict(
+                get_submodule_weights(checkpoint, "final_layer.")
+            )
         elif self.cfg.pretrained_source == "dc-ae":
             checkpoint = list(checkpoint["ema"].values())[0]
             self.get_trainable_modules().load_state_dict(checkpoint)
         else:
-            raise NotImplementedError(f"pretrained source {self.cfg.pretrained_source} is not supported")
+            raise NotImplementedError(
+                f"pretrained source {self.cfg.pretrained_source} is not supported"
+            )
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
@@ -431,7 +509,9 @@ class UViT(nn.Module):
         x = self.patch_embed(x)
         _, L, _ = x.shape
 
-        time_token = self.time_embed(timestep_embedding(timesteps, self.cfg.hidden_size))
+        time_token = self.time_embed(
+            timestep_embedding(timesteps, self.cfg.hidden_size)
+        )
         time_token = time_token.unsqueeze(dim=1)
         x = torch.cat((time_token, x), dim=1)
         if y is not None and self.cfg.num_classes > 0:
@@ -466,7 +546,10 @@ class UViT(nn.Module):
         half = x[: len(x) // 2]
         combined = torch.cat([half, half], dim=0)
         model_out = self.forward_without_cfg(combined, t, y)
-        eps, rest = model_out[:, : self.cfg.in_channels], model_out[:, self.cfg.in_channels :]
+        eps, rest = (
+            model_out[:, : self.cfg.in_channels],
+            model_out[:, self.cfg.in_channels :],
+        )
         cond_eps, uncond_eps = torch.split(eps, len(eps) // 2, dim=0)
         half_eps = uncond_eps + cfg_scale * (cond_eps - uncond_eps)
         eps = torch.cat([half_eps, half_eps], dim=0)
@@ -480,18 +563,33 @@ class UViT(nn.Module):
             loss = (eps - eps_pred).square().mean()
         elif self.cfg.train_scheduler == "SiTSampler":
             model_kwargs = dict(y=y)
-            loss_dict = self.transport.training_losses(self.forward_without_cfg, x, model_kwargs)
+            loss_dict = self.transport.training_losses(
+                self.forward_without_cfg, x, model_kwargs
+            )
             loss = loss_dict["loss"].mean()
         else:
-            raise NotImplementedError(f"train scheduler {self.cfg.train_scheduler} is not supported")
+            raise NotImplementedError(
+                f"train scheduler {self.cfg.train_scheduler} is not supported"
+            )
         info["loss_dict"] = {"loss": loss}
         return loss, info
 
     @torch.no_grad()
-    def generate(self, inputs, null_inputs, scale: float = 1.5, generator: Optional[torch.Generator] = None):
+    def generate(
+        self,
+        inputs,
+        null_inputs,
+        scale: float = 1.5,
+        generator: Optional[torch.Generator] = None,
+    ):
         device = get_device(self)
         samples = torch.randn(
-            (inputs.shape[0], self.cfg.in_channels, self.cfg.input_size, self.cfg.input_size),
+            (
+                inputs.shape[0],
+                self.cfg.in_channels,
+                self.cfg.input_size,
+                self.cfg.input_size,
+            ),
             generator=generator,
             device=device,
         )
@@ -510,24 +608,39 @@ class UViT(nn.Module):
                     eps_pre = _cond + (scale - 1) * (_cond - _uncond)
                 return eps_pre
 
-            dpm_solver = DPM_Solver(model_fn, self.eval_scheduler, predict_x0=True, thresholding=False)
-            samples = dpm_solver.sample(samples, steps=self.cfg.num_inference_steps, eps=1.0 / N, T=1.0)
+            dpm_solver = DPM_Solver(
+                model_fn, self.eval_scheduler, predict_x0=True, thresholding=False
+            )
+            samples = dpm_solver.sample(
+                samples, steps=self.cfg.num_inference_steps, eps=1.0 / N, T=1.0
+            )
         elif self.cfg.eval_scheduler in ["ODE_dopri5", "ODE_heun2"]:
             if scale != 1.0:
                 assert null_inputs is not None
                 samples = torch.cat([samples, samples], dim=0)
                 inputs = torch.cat([inputs, null_inputs], dim=0)
-                samples = self.eval_scheduler(samples, self.forward_with_cfg, y=inputs, cfg_scale=scale)[-1]
+                samples = self.eval_scheduler(
+                    samples, self.forward_with_cfg, y=inputs, cfg_scale=scale
+                )[-1]
                 samples, _ = samples.chunk(2, dim=0)
             else:
-                samples = self.eval_scheduler(samples, self.forward_without_cfg, y=inputs)[-1]
+                samples = self.eval_scheduler(
+                    samples, self.forward_without_cfg, y=inputs
+                )[-1]
         else:
-            raise NotImplementedError(f"eval scheduler {self.cfg.eval_scheduler} is not supported")
+            raise NotImplementedError(
+                f"eval scheduler {self.cfg.eval_scheduler} is not supported"
+            )
 
         return samples
 
 
-def dc_ae_uvit_s_in_512px(ae_name: str, scaling_factor: float, in_channels: int, pretrained_path: Optional[str]) -> str:
+def dc_ae_uvit_s_in_512px(
+    ae_name: str,
+    scaling_factor: float,
+    in_channels: int,
+    pretrained_path: Optional[str],
+) -> str:
     return (
         f"autoencoder={ae_name} scaling_factor={scaling_factor} "
         f"model=uvit uvit.depth=12 uvit.hidden_size=512 uvit.num_heads=8 uvit.in_channels={in_channels} uvit.patch_size=1 "
@@ -536,7 +649,12 @@ def dc_ae_uvit_s_in_512px(ae_name: str, scaling_factor: float, in_channels: int,
     )
 
 
-def dc_ae_uvit_h_in_512px(ae_name: str, scaling_factor: float, in_channels: int, pretrained_path: Optional[str]) -> str:
+def dc_ae_uvit_h_in_512px(
+    ae_name: str,
+    scaling_factor: float,
+    in_channels: int,
+    pretrained_path: Optional[str],
+) -> str:
     return (
         f"autoencoder={ae_name} scaling_factor={scaling_factor} "
         f"model=uvit uvit.depth=28 uvit.hidden_size=1152 uvit.num_heads=16 uvit.in_channels={in_channels} uvit.patch_size=1 "
@@ -546,7 +664,10 @@ def dc_ae_uvit_h_in_512px(ae_name: str, scaling_factor: float, in_channels: int,
 
 
 def dc_ae_uvit_2b_in_512px(
-    ae_name: str, scaling_factor: float, in_channels: int, pretrained_path: Optional[str]
+    ae_name: str,
+    scaling_factor: float,
+    in_channels: int,
+    pretrained_path: Optional[str],
 ) -> str:
     return (
         f"autoencoder={ae_name} scaling_factor={scaling_factor} "
@@ -556,7 +677,12 @@ def dc_ae_uvit_2b_in_512px(
     )
 
 
-def dc_ae_usit_h_in_512px(ae_name: str, scaling_factor: float, in_channels: int, pretrained_path: Optional[str]) -> str:
+def dc_ae_usit_h_in_512px(
+    ae_name: str,
+    scaling_factor: float,
+    in_channels: int,
+    pretrained_path: Optional[str],
+) -> str:
     return (
         f"autoencoder={ae_name} scaling_factor={scaling_factor} "
         f"model=uvit uvit.depth=28 uvit.hidden_size=1152 uvit.num_heads=16 uvit.in_channels={in_channels} uvit.patch_size=1 "
@@ -567,7 +693,10 @@ def dc_ae_usit_h_in_512px(ae_name: str, scaling_factor: float, in_channels: int,
 
 
 def dc_ae_usit_2b_in_512px(
-    ae_name: str, scaling_factor: float, in_channels: int, pretrained_path: Optional[str]
+    ae_name: str,
+    scaling_factor: float,
+    in_channels: int,
+    pretrained_path: Optional[str],
 ) -> str:
     return (
         f"autoencoder={ae_name} scaling_factor={scaling_factor} "

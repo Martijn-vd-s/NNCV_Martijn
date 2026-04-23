@@ -15,7 +15,10 @@ ROOT_DIR = os.path.dirname(os.path.dirname(BASE_DIR))
 sys.path.append(ROOT_DIR)
 
 from efficientvit.apps.utils import parse_unknown_args
-from efficientvit.models.efficientvit.sam import EfficientViTSamAutomaticMaskGenerator, EfficientViTSamPredictor
+from efficientvit.models.efficientvit.sam import (
+    EfficientViTSamAutomaticMaskGenerator,
+    EfficientViTSamPredictor,
+)
 from efficientvit.models.utils import build_kwargs_from_config
 from efficientvit.sam_model_zoo import create_efficientvit_sam_model
 
@@ -51,7 +54,13 @@ def show_anns(anns) -> None:
     ax = plt.gca()
     ax.set_autoscale_on(False)
 
-    img = np.ones((sorted_anns[0]["segmentation"].shape[0], sorted_anns[0]["segmentation"].shape[1], 4))
+    img = np.ones(
+        (
+            sorted_anns[0]["segmentation"].shape[0],
+            sorted_anns[0]["segmentation"].shape[1],
+            4,
+        )
+    )
     img[:, :, 3] = 0
     for ann in sorted_anns:
         m = ann["segmentation"]
@@ -60,7 +69,9 @@ def show_anns(anns) -> None:
     ax.imshow(img)
 
 
-def draw_binary_mask(raw_image: np.ndarray, binary_mask: np.ndarray, mask_color=(0, 0, 255)) -> np.ndarray:
+def draw_binary_mask(
+    raw_image: np.ndarray, binary_mask: np.ndarray, mask_color=(0, 0, 255)
+) -> np.ndarray:
     color_mask = np.zeros_like(raw_image, dtype=np.uint8)
     color_mask[binary_mask == 1] = mask_color
     mix = color_mask * 0.5 + raw_image * (1 - 0.5)
@@ -85,7 +96,16 @@ def draw_bbox(
     if isinstance(color, str):
         color = [color for _ in bbox]
     for (x0, y0, x1, y1), c in zip(bbox, color):
-        plt.gca().add_patch(Rectangle((x0, y0), x1 - x0, y1 - y0, lw=linewidth, edgecolor=c, facecolor=(0, 0, 0, 0)))
+        plt.gca().add_patch(
+            Rectangle(
+                (x0, y0),
+                x1 - x0,
+                y1 - y0,
+                lw=linewidth,
+                edgecolor=c,
+                facecolor=(0, 0, 0, 0),
+            )
+        )
     plt.axis("off")
     plt.savefig(tmp_name, format="png", dpi=dpi, bbox_inches="tight", pad_inches=0.0)
     image = cv2.resize(load_image(tmp_name), dsize=(ow, oh))
@@ -111,7 +131,9 @@ def draw_scatter(
     if isinstance(color, str):
         color = [color for _ in points]
     for (x, y), c in zip(points, color):
-        plt.scatter(x, y, color=c, marker=marker, s=s, edgecolors="white", linewidths=ew)
+        plt.scatter(
+            x, y, color=c, marker=marker, s=s, edgecolors="white", linewidths=ew
+        )
     plt.axis("off")
     plt.savefig(tmp_name, format="png", dpi=dpi, bbox_inches="tight", pad_inches=0.0)
     image = cv2.resize(load_image(tmp_name), dsize=(ow, oh))
@@ -126,9 +148,13 @@ def main():
     parser.add_argument("--weight_url", type=str, default=None)
     parser.add_argument("--multimask", action="store_true")
     parser.add_argument("--image_path", type=str, default="assets/fig/cat.jpg")
-    parser.add_argument("--output_path", type=str, default=".demo/efficientvit_sam_demo.png")
+    parser.add_argument(
+        "--output_path", type=str, default=".demo/efficientvit_sam_demo.png"
+    )
 
-    parser.add_argument("--mode", type=str, default="all", choices=["point", "box", "all"])
+    parser.add_argument(
+        "--mode", type=str, default="all", choices=["point", "box", "all"]
+    )
     parser.add_argument("--point", type=str, default=None)
     parser.add_argument("--box", type=str, default=None)
 
@@ -143,7 +169,9 @@ def main():
     os.makedirs(os.path.dirname(args.output_path), exist_ok=True)
 
     # build model
-    efficientvit_sam = create_efficientvit_sam_model(args.model, True, args.weight_url).cuda().eval()
+    efficientvit_sam = (
+        create_efficientvit_sam_model(args.model, True, args.weight_url).cuda().eval()
+    )
     efficientvit_sam_predictor = EfficientViTSamPredictor(efficientvit_sam)
     efficientvit_mask_generator = EfficientViTSamAutomaticMaskGenerator(
         efficientvit_sam,
@@ -165,9 +193,13 @@ def main():
         plt.imshow(raw_image)
         show_anns(masks)
         plt.axis("off")
-        plt.savefig(args.output_path, format="png", dpi=300, bbox_inches="tight", pad_inches=0.0)
+        plt.savefig(
+            args.output_path, format="png", dpi=300, bbox_inches="tight", pad_inches=0.0
+        )
     elif args.mode == "point":
-        args.point = yaml.safe_load(f"[[{W // 2},{H // 2},{1}]]" if args.point is None else args.point)
+        args.point = yaml.safe_load(
+            f"[[{W // 2},{H // 2},{1}]]" if args.point is None else args.point
+        )
         point_coords = [(x, y) for x, y, _ in args.point]
         point_labels = [l for _, _, l in args.point]
 

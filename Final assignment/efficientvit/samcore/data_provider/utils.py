@@ -9,7 +9,12 @@ import torchvision.transforms as transforms
 from torch.utils.data import Dataset
 from torch.utils.data.distributed import DistributedSampler
 
-__all__ = ["SAMDistributedSampler", "RandomHFlip", "ResizeLongestSide", "Normalize_and_Pad"]
+__all__ = [
+    "SAMDistributedSampler",
+    "RandomHFlip",
+    "ResizeLongestSide",
+    "Normalize_and_Pad",
+]
 
 
 class SAMDistributedSampler(DistributedSampler):
@@ -48,7 +53,9 @@ class SAMDistributedSampler(DistributedSampler):
             if padding_size <= len(indices):
                 indices += indices[:padding_size]
             else:
-                indices += (indices * math.ceil(padding_size / len(indices)))[:padding_size]
+                indices += (indices * math.ceil(padding_size / len(indices)))[
+                    :padding_size
+                ]
         else:
             # remove tail of data to make it evenly divisible.
             indices = indices[: self.total_size]
@@ -58,7 +65,9 @@ class SAMDistributedSampler(DistributedSampler):
         indices = indices[self.rank : self.total_size : self.num_replicas]
         assert len(indices) == self.num_samples
 
-        indices = indices[(self.sub_epoch % self.sub_epochs_per_epoch) :: self.sub_epochs_per_epoch]
+        indices = indices[
+            (self.sub_epoch % self.sub_epochs_per_epoch) :: self.sub_epochs_per_epoch
+        ]
 
         return iter(indices)
 
@@ -108,7 +117,13 @@ class RandomHFlip(object):
             points[:, 0] = shape[-1] - points[:, 0]
             bboxs[:, 0] = shape[-1] - bboxs[:, 2] - bboxs[:, 0]
 
-        return {"image": image, "masks": masks, "points": points, "bboxs": bboxs, "shape": shape}
+        return {
+            "image": image,
+            "masks": masks,
+            "points": points,
+            "bboxs": bboxs,
+            "shape": shape,
+        }
 
 
 class ResizeLongestSide(object):
@@ -119,11 +134,19 @@ class ResizeLongestSide(object):
     def __init__(self, target_length: int) -> None:
         self.target_length = target_length
 
-    def apply_image(self, image: torch.Tensor, original_size: tuple[int, ...]) -> torch.Tensor:
-        target_size = self.get_preprocess_shape(original_size[0], original_size[1], self.target_length)
-        return F.interpolate(image, target_size, mode="bilinear", align_corners=False, antialias=True)
+    def apply_image(
+        self, image: torch.Tensor, original_size: tuple[int, ...]
+    ) -> torch.Tensor:
+        target_size = self.get_preprocess_shape(
+            original_size[0], original_size[1], self.target_length
+        )
+        return F.interpolate(
+            image, target_size, mode="bilinear", align_corners=False, antialias=True
+        )
 
-    def apply_boxes(self, boxes: torch.Tensor, original_size: tuple[int, ...]) -> torch.Tensor:
+    def apply_boxes(
+        self, boxes: torch.Tensor, original_size: tuple[int, ...]
+    ) -> torch.Tensor:
         """
         Expects a torch tensor with shape Bx4. Requires the original image
         size in (H, W) format.
@@ -131,20 +154,26 @@ class ResizeLongestSide(object):
         boxes = self.apply_coords(boxes.reshape(-1, 2, 2), original_size)
         return boxes.reshape(-1, 4)
 
-    def apply_coords(self, coords: torch.Tensor, original_size: tuple[int, ...]) -> torch.Tensor:
+    def apply_coords(
+        self, coords: torch.Tensor, original_size: tuple[int, ...]
+    ) -> torch.Tensor:
         """
         Expects a torch tensor with length 2 in the last dimension. Requires the
         original image size in (H, W) format.
         """
         old_h, old_w = original_size
-        new_h, new_w = self.get_preprocess_shape(original_size[0], original_size[1], self.target_length)
+        new_h, new_w = self.get_preprocess_shape(
+            original_size[0], original_size[1], self.target_length
+        )
         coords = deepcopy(coords).to(torch.float)
         coords[..., 0] = coords[..., 0] * (new_w / old_w)
         coords[..., 1] = coords[..., 1] * (new_h / old_h)
         return coords
 
     @staticmethod
-    def get_preprocess_shape(oldh: int, oldw: int, long_side_length: int) -> tuple[int, int]:
+    def get_preprocess_shape(
+        oldh: int, oldw: int, long_side_length: int
+    ) -> tuple[int, int]:
         """
         Compute the output size given input size and target long side length.
         """
@@ -168,13 +197,21 @@ class ResizeLongestSide(object):
         points = self.apply_coords(points, shape)
         bboxs = self.apply_boxes(bboxs, shape)
 
-        return {"image": image, "masks": masks, "points": points, "bboxs": bboxs, "shape": shape}
+        return {
+            "image": image,
+            "masks": masks,
+            "points": points,
+            "bboxs": bboxs,
+            "shape": shape,
+        }
 
 
 class Normalize_and_Pad(object):
     def __init__(self, target_length: int) -> None:
         self.target_length = target_length
-        self.transform = transforms.Normalize(mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375])
+        self.transform = transforms.Normalize(
+            mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375]
+        )
 
     def __call__(self, sample):
         image, masks, points, bboxs, shape = (
@@ -194,4 +231,10 @@ class Normalize_and_Pad(object):
         image = F.pad(image.unsqueeze(0), (0, padw, 0, padh), value=0).squeeze(0)
         masks = F.pad(masks.unsqueeze(1), (0, padw, 0, padh), value=0).squeeze(1)
 
-        return {"image": image, "masks": masks, "points": points, "bboxs": bboxs, "shape": shape}
+        return {
+            "image": image,
+            "masks": masks,
+            "points": points,
+            "bboxs": bboxs,
+            "shape": shape,
+        }

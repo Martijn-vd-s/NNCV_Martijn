@@ -1,4 +1,7 @@
-from efficientvit.gazesamcore.gaze.helpers import find_edge_intersection, get_point_along_gaze
+from efficientvit.gazesamcore.gaze.helpers import (
+    find_edge_intersection,
+    get_point_along_gaze,
+)
 from efficientvit.gazesamcore.gaze.runtime_variants import (
     run_gaze_estimation_model_onnx,
     run_gaze_estimation_model_tensorrt,
@@ -39,8 +42,11 @@ def get_gaze_endpoints(img, face_bb, gaze_yawpitch):
     h, w, _ = img.shape
     gaze_tail = find_edge_intersection(w, h, gaze_head, point_along_gaze)
 
-    gaze_head, gaze_tail = (int(gaze_head[0]), int(gaze_head[1])), (
-        int(gaze_tail[0]),
-        int(gaze_tail[1]),
+    gaze_head, gaze_tail = (
+        (int(gaze_head[0]), int(gaze_head[1])),
+        (
+            int(gaze_tail[0]),
+            int(gaze_tail[1]),
+        ),
     )
     return gaze_head, gaze_tail

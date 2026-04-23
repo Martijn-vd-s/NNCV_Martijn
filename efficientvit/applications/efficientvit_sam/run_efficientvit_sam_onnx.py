@@ -28,17 +28,31 @@ def show_points(coords, labels, ax, marker_size=375):
     pos_points = coords[labels == 1]
     neg_points = coords[labels == 0]
     ax.scatter(
-        pos_points[:, 0], pos_points[:, 1], color="green", marker="*", s=marker_size, edgecolor="white", linewidth=1.25
+        pos_points[:, 0],
+        pos_points[:, 1],
+        color="green",
+        marker="*",
+        s=marker_size,
+        edgecolor="white",
+        linewidth=1.25,
     )
     ax.scatter(
-        neg_points[:, 0], neg_points[:, 1], color="red", marker="*", s=marker_size, edgecolor="white", linewidth=1.25
+        neg_points[:, 0],
+        neg_points[:, 1],
+        color="red",
+        marker="*",
+        s=marker_size,
+        edgecolor="white",
+        linewidth=1.25,
     )
 
 
 def show_box(box, ax):
     x0, y0 = box[0], box[1]
     w, h = box[2] - box[0], box[3] - box[1]
-    ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor="green", facecolor=(0, 0, 0, 0), lw=2))
+    ax.add_patch(
+        plt.Rectangle((x0, y0), w, h, edgecolor="green", facecolor=(0, 0, 0, 0), lw=2)
+    )
 
 
 class SamEncoder:
@@ -53,7 +67,9 @@ class SamEncoder:
             raise ValueError("Invalid device, please use 'cuda' or 'cpu' device.")
 
         print(f"loading encoder model from {model_path}...")
-        self.session = ort.InferenceSession(model_path, opt, providers=provider, **kwargs)
+        self.session = ort.InferenceSession(
+            model_path, opt, providers=provider, **kwargs
+        )
         self.input_name = self.session.get_inputs()[0].name
 
     def _extract_feature(self, tensor: np.ndarray) -> np.ndarray:
@@ -66,7 +82,12 @@ class SamEncoder:
 
 class SamDecoder:
     def __init__(
-        self, model_path: str, device: str = "cpu", target_size: int = 1024, mask_threshold: float = 0.0, **kwargs
+        self,
+        model_path: str,
+        device: str = "cpu",
+        target_size: int = 1024,
+        mask_threshold: float = 0.0,
+        **kwargs,
     ):
         opt = ort.SessionOptions()
 
@@ -80,10 +101,14 @@ class SamDecoder:
         print(f"loading decoder model from {model_path}...")
         self.target_size = target_size
         self.mask_threshold = mask_threshold
-        self.session = ort.InferenceSession(model_path, opt, providers=provider, **kwargs)
+        self.session = ort.InferenceSession(
+            model_path, opt, providers=provider, **kwargs
+        )
 
     @staticmethod
-    def get_preprocess_shape(oldh: int, oldw: int, long_side_length: int) -> tuple[int, int]:
+    def get_preprocess_shape(
+        oldh: int, oldw: int, long_side_length: int
+    ) -> tuple[int, int]:
         """
         Compute the output size given input size and target long side length.
         """
@@ -102,22 +127,32 @@ class SamDecoder:
         boxes: list | np.ndarray = None,
         return_logits: bool = False,
     ):
-        input_size = self.get_preprocess_shape(*origin_image_size, long_side_length=self.target_size)
+        input_size = self.get_preprocess_shape(
+            *origin_image_size, long_side_length=self.target_size
+        )
 
         if point_coords is None and point_labels is None and boxes is None:
-            raise ValueError("Unable to segment, please input at least one box or point.")
+            raise ValueError(
+                "Unable to segment, please input at least one box or point."
+            )
 
         if img_embeddings.shape != (1, 256, 64, 64):
             raise ValueError("Got wrong embedding shape!")
 
         if point_coords is not None:
-            point_coords = self.apply_coords(point_coords, origin_image_size, input_size).astype(np.float32)
+            point_coords = self.apply_coords(
+                point_coords, origin_image_size, input_size
+            ).astype(np.float32)
 
             prompts, labels = point_coords, point_labels
 
         if boxes is not None:
-            boxes = self.apply_boxes(boxes, origin_image_size, input_size).astype(np.float32)
-            box_labels = np.array([[2, 3] for _ in range(boxes.shape[0])], dtype=np.float32).reshape((-1, 2))
+            boxes = self.apply_boxes(boxes, origin_image_size, input_size).astype(
+                np.float32
+            )
+            box_labels = np.array(
+                [[2, 3] for _ in range(boxes.shape[0])], dtype=np.float32
+            ).reshape((-1, 2))
 
             if point_coords is not None:
                 prompts = np.concatenate([prompts, boxes], axis=1)
@@ -125,7 +160,11 @@ class SamDecoder:
             else:
                 prompts, labels = boxes, box_labels
 
-        input_dict = {"image_embeddings": img_embeddings, "point_coords": prompts, "point_labels": labels}
+        input_dict = {
+            "image_embeddings": img_embeddings,
+            "point_coords": prompts,
+            "point_labels": labels,
+        }
         low_res_masks, iou_predictions = self.session.run(None, input_dict)
 
         masks = mask_postprocessing(low_res_masks, origin_image_size)
@@ -164,7 +203,9 @@ def preprocess(x, img_size):
     return x
 
 
-def resize_longest_image_size(input_image_size: torch.Tensor, longest_side: int) -> torch.Tensor:
+def resize_longest_image_size(
+    input_image_size: torch.Tensor, longest_side: int
+) -> torch.Tensor:
     input_image_size = input_image_size.to(torch.float32)
     scale = longest_side / torch.max(input_image_size)
     transformed_size = scale * input_image_size
@@ -172,7 +213,9 @@ def resize_longest_image_size(input_image_size: torch.Tensor, longest_side: int)
     return transformed_size
 
 
-def mask_postprocessing(masks: torch.Tensor, orig_im_size: torch.Tensor) -> torch.Tensor:
+def mask_postprocessing(
+    masks: torch.Tensor, orig_im_size: torch.Tensor
+) -> torch.Tensor:
     img_size = 1024
     masks = torch.tensor(masks)
     orig_im_size = torch.tensor(orig_im_size)
@@ -195,13 +238,21 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, required=True, help="model type.")
     parser.add_argument(
-        "--encoder_model", type=str, required=True, help="Path to the efficientvit_sam onnx encoder model."
+        "--encoder_model",
+        type=str,
+        required=True,
+        help="Path to the efficientvit_sam onnx encoder model.",
     )
     parser.add_argument(
-        "--decoder_model", type=str, required=True, help="Path to the efficientvit_sam onnx decoder model."
+        "--decoder_model",
+        type=str,
+        required=True,
+        help="Path to the efficientvit_sam onnx decoder model.",
     )
     parser.add_argument("--img_path", type=str, default="assets/fig/cat.jpg")
-    parser.add_argument("--out_path", type=str, default=".demo/efficientvit_sam_demo_onnx.png")
+    parser.add_argument(
+        "--out_path", type=str, default=".demo/efficientvit_sam_demo_onnx.png"
+    )
     parser.add_argument("--mode", type=str, default="point", choices=["point", "boxes"])
     parser.add_argument("--point", type=str, default=None)
     parser.add_argument("--boxes", type=str, default=None)
@@ -214,7 +265,11 @@ if __name__ == "__main__":
 
     raw_img = cv2.cvtColor(cv2.imread(args.img_path), cv2.COLOR_BGR2RGB)
     origin_image_size = raw_img.shape[:2]
-    if args.model in ["efficientvit-sam-l0", "efficientvit-sam-l1", "efficientvit-sam-l2"]:
+    if args.model in [
+        "efficientvit-sam-l0",
+        "efficientvit-sam-l1",
+        "efficientvit-sam-l2",
+    ]:
         img = preprocess(raw_img, img_size=512)
     elif args.model in ["efficientvit-sam-xl0", "efficientvit-sam-xl1"]:
         img = preprocess(raw_img, img_size=1024)
@@ -226,7 +281,10 @@ if __name__ == "__main__":
     if args.mode == "point":
         H, W, _ = raw_img.shape
         point = np.array(
-            yaml.safe_load(f"[[[{W // 2}, {H // 2}, {1}]]]" if args.point is None else args.point), dtype=np.float32
+            yaml.safe_load(
+                f"[[[{W // 2}, {H // 2}, {1}]]]" if args.point is None else args.point
+            ),
+            dtype=np.float32,
         )
         point_coords = point[..., :2]
         point_labels = point[..., 2]

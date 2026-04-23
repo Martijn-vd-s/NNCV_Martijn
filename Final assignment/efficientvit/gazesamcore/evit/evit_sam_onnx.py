@@ -2,7 +2,11 @@ import numpy as np
 import onnxruntime as ort
 import torch
 
-from efficientvit.gazesamcore.evit.helpers import apply_boxes, postprocess_masks, preprocess
+from efficientvit.gazesamcore.evit.helpers import (
+    apply_boxes,
+    postprocess_masks,
+    preprocess,
+)
 from efficientvit.gazesamcore.utils.timer import Timer
 
 __all__ = ["OnnxEvitSam", "OnnxEvitSamEncoder", "OnnxEvitSamDecoder"]
@@ -22,7 +26,9 @@ class OnnxEvitSam:
         self.original_size = None
         self.input_size = None
 
-    def set_image(self, image: np.ndarray, image_format: str = "RGB", timer: Timer = None) -> None:
+    def set_image(
+        self, image: np.ndarray, image_format: str = "RGB", timer: Timer = None
+    ) -> None:
         assert image_format in [
             "RGB",
             "BGR",
@@ -74,7 +80,9 @@ class OnnxEvitSam:
             number of masks, and (H, W) is the original image size.
         """
         if not self.is_image_set:
-            raise RuntimeError("An image must be set with .set_image(...) before mask prediction.")
+            raise RuntimeError(
+                "An image must be set with .set_image(...) before mask prediction."
+            )
 
         if timer is not None:
             timer.start("evit decoder")
@@ -120,7 +128,9 @@ class OnnxEvitSamEncoder:
             buffer_ptr=tensor.data_ptr(),
         )
 
-        output = torch.empty((1, 256, 64, 64), dtype=torch.float32, device=self.device).contiguous()
+        output = torch.empty(
+            (1, 256, 64, 64), dtype=torch.float32, device=self.device
+        ).contiguous()
         io_binding.bind_output(
             name="image_embeddings",
             device_type=self.device,
@@ -158,10 +168,14 @@ class OnnxEvitSamDecoder:
 
         self.target_size = target_size
         self.mask_threshold = mask_threshold
-        self.session = ort.InferenceSession(model_path, opt, providers=provider, **kwargs)
+        self.session = ort.InferenceSession(
+            model_path, opt, providers=provider, **kwargs
+        )
 
     @staticmethod
-    def get_preprocess_shape(oldh: int, oldw: int, long_side_length: int) -> tuple[int, int]:
+    def get_preprocess_shape(
+        oldh: int, oldw: int, long_side_length: int
+    ) -> tuple[int, int]:
         """
         Compute the output size given input size and target long side length.
         """
@@ -178,7 +192,9 @@ class OnnxEvitSamDecoder:
         boxes: list | np.ndarray = None,
         return_logits: bool = False,
     ):
-        input_size = self.get_preprocess_shape(*origin_image_size, long_side_length=self.target_size)
+        input_size = self.get_preprocess_shape(
+            *origin_image_size, long_side_length=self.target_size
+        )
 
         if img_embeddings.shape != (1, 256, 64, 64):
             raise ValueError("Got wrong embedding shape!")

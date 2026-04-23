@@ -6,7 +6,9 @@
 import numpy as np
 import torch as th
 
-from efficientvit.diffusioncore.models.dit_sampler.gaussian_diffusion import GaussianDiffusion
+from efficientvit.diffusioncore.models.dit_sampler.gaussian_diffusion import (
+    GaussianDiffusion,
+)
 
 __all__ = ["SpacedDiffusion"]
 
@@ -36,7 +38,9 @@ def space_timesteps(num_timesteps, section_counts):
             for i in range(1, num_timesteps):
                 if len(range(0, num_timesteps, i)) == desired_count:
                     return set(range(0, num_timesteps, i))
-            raise ValueError(f"cannot create exactly {num_timesteps} steps with an integer stride")
+            raise ValueError(
+                f"cannot create exactly {num_timesteps} steps with an integer stride"
+            )
         section_counts = [int(x) for x in section_counts.split(",")]
     size_per = num_timesteps // len(section_counts)
     extra = num_timesteps % len(section_counts)
@@ -45,7 +49,9 @@ def space_timesteps(num_timesteps, section_counts):
     for i, section_count in enumerate(section_counts):
         size = size_per + (1 if i < extra else 0)
         if size < section_count:
-            raise ValueError(f"cannot divide section of {size} steps into {section_count}")
+            raise ValueError(
+                f"cannot divide section of {size} steps into {section_count}"
+            )
         if section_count <= 1:
             frac_stride = 1
         else:

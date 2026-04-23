@@ -49,5 +49,6 @@ COPY efficientvit /app/efficientvit
 # COPY dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth /app/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth
 # COPY lraspp_mobilenetv3_pretrained.pth /app/lraspp_mobilenetv3_pretrained.pth
 COPY b0.pt /app/b0.pt
+# COPY mit-b5 /app/mit-b5
 
 ENTRYPOINT ["python", "/app/predict.py"]

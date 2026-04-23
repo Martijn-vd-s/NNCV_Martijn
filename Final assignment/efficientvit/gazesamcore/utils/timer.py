@@ -15,7 +15,9 @@ class Timer:
         torch.cuda.synchronize()
 
         if category in self.running:
-            raise ValueError(f"Category {category} already running: {self.running.keys()}")
+            raise ValueError(
+                f"Category {category} already running: {self.running.keys()}"
+            )
 
         self.running[category] = time.time()
 
@@ -23,7 +25,9 @@ class Timer:
         torch.cuda.synchronize()
         end_time = time.time()
         if category not in self.running:
-            raise ValueError(f"Category {category} not found in running timers: {self.times.keys()}")
+            raise ValueError(
+                f"Category {category} not found in running timers: {self.times.keys()}"
+            )
 
         runtime = end_time - self.running[category]
         self.times[category] = self.times.get(category, []) + [runtime]

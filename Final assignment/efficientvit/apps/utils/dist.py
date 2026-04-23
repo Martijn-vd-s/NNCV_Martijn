@@ -55,7 +55,9 @@ def get_dist_local_rank() -> int:
     return int(os.environ["LOCAL_RANK"])
 
 
-def sync_tensor(tensor: torch.Tensor | float, reduce="mean") -> torch.Tensor | list[torch.Tensor]:
+def sync_tensor(
+    tensor: torch.Tensor | float, reduce="mean"
+) -> torch.Tensor | list[torch.Tensor]:
     if not is_dist_initialized():
         return tensor
     if not isinstance(tensor, torch.Tensor):

@@ -2,10 +2,16 @@ import numpy as np
 import torch
 
 try:
-    from efficientvit.gazesamcore.evit.helpers import apply_boxes, postprocess_masks, preprocess
+    from efficientvit.gazesamcore.evit.helpers import (
+        apply_boxes,
+        postprocess_masks,
+        preprocess,
+    )
 except Exception as e:
     print(f"Skipping tensorrt-runtime import error: {e}")
-    print("If using a non-tensorrt runtime, ignore.  Otherwise, please ensure tensorrt and torch2trt are installed")
+    print(
+        "If using a non-tensorrt runtime, ignore.  Otherwise, please ensure tensorrt and torch2trt are installed"
+    )
     pass
 
 __all__ = ["TrtEvitSam"]
@@ -69,7 +75,9 @@ class TrtEvitSam:
             number of masks, and (H, W) is the original image size.
         """
         if not self.is_image_set:
-            raise RuntimeError("An image must be set with .set_image(...) before mask prediction.")
+            raise RuntimeError(
+                "An image must be set with .set_image(...) before mask prediction."
+            )
 
         boxes = apply_boxes(boxes, self.original_size, im_size).astype(np.float32)
         boxes = torch.from_numpy(boxes).cuda()

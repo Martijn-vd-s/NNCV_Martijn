@@ -46,12 +46,20 @@ class DistributedRangedSampler(Sampler):
             if not self.drop_last:
                 total_size = self.num_replicas * self.num_samples_per_rank
                 padding_size = total_size - len(indices)
-                indices += (indices * ((padding_size - 1) // len(indices) + 1))[:padding_size]
-            indices = indices[self.rank * self.num_samples_per_rank : (self.rank + 1) * self.num_samples_per_rank]
+                indices += (indices * ((padding_size - 1) // len(indices) + 1))[
+                    :padding_size
+                ]
+            indices = indices[
+                self.rank * self.num_samples_per_rank : (self.rank + 1)
+                * self.num_samples_per_rank
+            ]
             assert len(indices) == self.num_samples_per_rank
             yield from indices[self.iter_idx :]
         else:
             start = self.rank * self.num_samples_per_rank + self.iter_idx
             end = (self.rank + 1) * self.num_samples_per_rank
-            indices = torch.arange(self.num_replicas * self.num_samples_per_rank) % self.num_samples
+            indices = (
+                torch.arange(self.num_replicas * self.num_samples_per_rank)
+                % self.num_samples
+            )
             yield from indices[start:end]

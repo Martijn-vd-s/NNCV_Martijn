@@ -4,7 +4,10 @@
 #     IDDPM: https://github.com/openai/improved-diffusion/blob/main/improved_diffusion/gaussian_diffusion.py
 
 from efficientvit.diffusioncore.models.dit_sampler import gaussian_diffusion as gd
-from efficientvit.diffusioncore.models.dit_sampler.respace import SpacedDiffusion, space_timesteps
+from efficientvit.diffusioncore.models.dit_sampler.respace import (
+    SpacedDiffusion,
+    space_timesteps,
+)
 
 __all__ = ["create_diffusion"]
 
@@ -31,9 +34,15 @@ def create_diffusion(
     return SpacedDiffusion(
         use_timesteps=space_timesteps(diffusion_steps, timestep_respacing),
         betas=betas,
-        model_mean_type=(gd.ModelMeanType.EPSILON if not predict_xstart else gd.ModelMeanType.START_X),
+        model_mean_type=(
+            gd.ModelMeanType.EPSILON if not predict_xstart else gd.ModelMeanType.START_X
+        ),
         model_var_type=(
-            (gd.ModelVarType.FIXED_LARGE if not sigma_small else gd.ModelVarType.FIXED_SMALL)
+            (
+                gd.ModelVarType.FIXED_LARGE
+                if not sigma_small
+                else gd.ModelVarType.FIXED_SMALL
+            )
             if not learn_sigma
             else gd.ModelVarType.LEARNED_RANGE
         ),

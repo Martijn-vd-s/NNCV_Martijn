@@ -4,7 +4,11 @@ import torch
 
 from efficientvit.gazesamcore.gaze.helpers import preprocess_gaze
 
-__all__ = ["run_gaze_estimation_model_onnx", "run_gaze_estimation_model_tensorrt", "get_cropped_face"]
+__all__ = [
+    "run_gaze_estimation_model_onnx",
+    "run_gaze_estimation_model_tensorrt",
+    "get_cropped_face",
+]
 
 
 def run_gaze_estimation_model_onnx(img, face_bbox, model, timer=None):
@@ -45,7 +49,9 @@ def run_gaze_estimation_model_tensorrt(img, face_bbox, model):
         return None
 
     preprocessed_img = preprocess_gaze([cropped_face])
-    preprocessed_img = torch.tensor(preprocessed_img, dtype=torch.float32, device="cuda")
+    preprocessed_img = torch.tensor(
+        preprocessed_img, dtype=torch.float32, device="cuda"
+    )
 
     output = model(preprocessed_img)
     output = output.cpu().numpy()

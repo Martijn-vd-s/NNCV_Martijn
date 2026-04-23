@@ -1,7 +1,12 @@
 import cv2
 import numpy as np
 
-__all__ = ["resize_and_pad", "preprocess_gaze", "get_point_along_gaze", "find_edge_intersection"]
+__all__ = [
+    "resize_and_pad",
+    "preprocess_gaze",
+    "get_point_along_gaze",
+    "find_edge_intersection",
+]
 
 
 def resize_and_pad(
@@ -29,7 +34,10 @@ def resize_and_pad(
         new_h = sh
         new_w = np.round(new_h * aspect).astype(int)
         pad_horz = (sw - new_w) / 2
-        pad_left, pad_right = np.floor(pad_horz).astype(int), np.ceil(pad_horz).astype(int)
+        pad_left, pad_right = (
+            np.floor(pad_horz).astype(int),
+            np.ceil(pad_horz).astype(int),
+        )
         pad_top, pad_bot = 0, 0
     else:  # square image
         new_h, new_w = sh, sw

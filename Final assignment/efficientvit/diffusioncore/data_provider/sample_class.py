@@ -3,9 +3,16 @@ from dataclasses import dataclass
 import torch
 from torch.utils.data import Dataset
 
-from efficientvit.diffusioncore.data_provider.base import BaseDataProvider, BaseDataProviderConfig
+from efficientvit.diffusioncore.data_provider.base import (
+    BaseDataProvider,
+    BaseDataProviderConfig,
+)
 
-__all__ = ["SampleClassDataProviderConfig", "SampleClassDataset", "SampleClassDataProvider"]
+__all__ = [
+    "SampleClassDataProviderConfig",
+    "SampleClassDataset",
+    "SampleClassDataProvider",
+]
 
 
 @dataclass
@@ -21,7 +28,9 @@ class SampleClassDataset(Dataset):
         self.cfg = cfg
         self.generator = torch.Generator()
         self.generator.manual_seed(cfg.seed)
-        self.class_ids = torch.randint(0, cfg.num_classes, (cfg.num_samples,), generator=self.generator).int()
+        self.class_ids = torch.randint(
+            0, cfg.num_classes, (cfg.num_samples,), generator=self.generator
+        ).int()
 
     def __len__(self):
         return self.cfg.num_samples

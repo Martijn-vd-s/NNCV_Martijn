@@ -64,10 +64,14 @@ class DCAEConfig:
     in_channels: int = 3
     latent_channels: int = 32
     encoder: EncoderConfig = field(
-        default_factory=lambda: EncoderConfig(in_channels="${..in_channels}", latent_channels="${..latent_channels}")
+        default_factory=lambda: EncoderConfig(
+            in_channels="${..in_channels}", latent_channels="${..latent_channels}"
+        )
     )
     decoder: DecoderConfig = field(
-        default_factory=lambda: DecoderConfig(in_channels="${..in_channels}", latent_channels="${..latent_channels}")
+        default_factory=lambda: DecoderConfig(
+            in_channels="${..in_channels}", latent_channels="${..latent_channels}"
+        )
     )
     use_quant_conv: bool = False
 
@@ -78,7 +82,11 @@ class DCAEConfig:
 
 
 def build_block(
-    block_type: str, in_channels: int, out_channels: int, norm: Optional[str], act: Optional[str]
+    block_type: str,
+    in_channels: int,
+    out_channels: int,
+    norm: Optional[str],
+    act: Optional[str],
 ) -> nn.Module:
     if block_type == "ResBlock":
         assert in_channels == out_channels
@@ -94,22 +102,35 @@ def build_block(
         block = ResidualBlock(main_block, IdentityLayer())
     elif block_type == "EViT_GLU":
         assert in_channels == out_channels
-        block = EfficientViTBlock(in_channels, norm=norm, act_func=act, local_module="GLUMBConv", scales=())
+        block = EfficientViTBlock(
+            in_channels, norm=norm, act_func=act, local_module="GLUMBConv", scales=()
+        )
     elif block_type == "EViTS5_GLU":
         assert in_channels == out_channels
-        block = EfficientViTBlock(in_channels, norm=norm, act_func=act, local_module="GLUMBConv", scales=(5,))
+        block = EfficientViTBlock(
+            in_channels, norm=norm, act_func=act, local_module="GLUMBConv", scales=(5,)
+        )
     else:
         raise ValueError(f"block_type {block_type} is not supported")
     return block
 
 
 def build_stage_main(
-    width: int, depth: int, block_type: str | list[str], norm: str, act: str, input_width: int
+    width: int,
+    depth: int,
+    block_type: str | list[str],
+    norm: str,
+    act: str,
+    input_width: int,
 ) -> list[nn.Module]:
-    assert isinstance(block_type, str) or (isinstance(block_type, list) and depth == len(block_type))
+    assert isinstance(block_type, str) or (
+        isinstance(block_type, list) and depth == len(block_type)
+    )
     stage = []
     for d in range(depth):
-        current_block_type = block_type[d] if isinstance(block_type, list) else block_type
+        current_block_type = (
+            block_type[d] if isinstance(block_type, list) else block_type
+        )
         block = build_block(
             block_type=current_block_type,
             in_channels=width if d > 0 else input_width,
@@ -121,7 +142,9 @@ def build_stage_main(
     return stage
 
 
-def build_downsample_block(block_type: str, in_channels: int, out_channels: int, shortcut: Optional[str]) -> nn.Module:
+def build_downsample_block(
+    block_type: str, in_channels: int, out_channels: int, shortcut: Optional[str]
+) -> nn.Module:
     if block_type == "Conv":
         block = ConvLayer(
             in_channels=in_channels,
@@ -150,7 +173,9 @@ def build_downsample_block(block_type: str, in_channels: int, out_channels: int,
     return block
 
 
-def build_upsample_block(block_type: str, in_channels: int, out_channels: int, shortcut: Optional[str]) -> nn.Module:
+def build_upsample_block(
+    block_type: str, in_channels: int, out_channels: int, shortcut: Optional[str]
+) -> nn.Module:
     if block_type == "ConvPixelShuffle":
         block = ConvPixelShuffleUpSampleLayer(
             in_channels=in_channels, out_channels=out_channels, kernel_size=3, factor=2
@@ -173,7 +198,9 @@ def build_upsample_block(block_type: str, in_channels: int, out_channels: int, s
     return block
 
 
-def build_encoder_project_in_block(in_channels: int, out_channels: int, factor: int, downsample_block_type: str):
+def build_encoder_project_in_block(
+    in_channels: int, out_channels: int, factor: int, downsample_block_type: str
+):
     if factor == 1:
         block = ConvLayer(
             in_channels=in_channels,
@@ -186,15 +213,24 @@ def build_encoder_project_in_block(in_channels: int, out_channels: int, factor: 
         )
     elif factor == 2:
         block = build_downsample_block(
-            block_type=downsample_block_type, in_channels=in_channels, out_channels=out_channels, shortcut=None
+            block_type=downsample_block_type,
+            in_channels=in_channels,
+            out_channels=out_channels,
+            shortcut=None,
         )
     else:
-        raise ValueError(f"downsample factor {factor} is not supported for encoder project in")
+        raise ValueError(
+            f"downsample factor {factor} is not supported for encoder project in"
+        )
     return block
 
 
 def build_encoder_project_out_block(
-    in_channels: int, out_channels: int, norm: Optional[str], act: Optional[str], shortcut: Optional[str]
+    in_channels: int,
+    out_channels: int,
+    norm: Optional[str],
+    act: Optional[str],
+    shortcut: Optional[str],
 ):
     block = OpSequential(
         [
@@ -219,11 +255,15 @@ def build_encoder_project_out_block(
         )
         block = ResidualBlock(block, shortcut_block)
     else:
-        raise ValueError(f"shortcut {shortcut} is not supported for encoder project out")
+        raise ValueError(
+            f"shortcut {shortcut} is not supported for encoder project out"
+        )
     return block
 
 
-def build_decoder_project_in_block(in_channels: int, out_channels: int, shortcut: Optional[str]):
+def build_decoder_project_in_block(
+    in_channels: int, out_channels: int, shortcut: Optional[str]
+):
     block = ConvLayer(
         in_channels=in_channels,
         out_channels=out_channels,
@@ -246,7 +286,12 @@ def build_decoder_project_in_block(in_channels: int, out_channels: int, shortcut
 
 
 def build_decoder_project_out_block(
-    in_channels: int, out_channels: int, factor: int, upsample_block_type: str, norm: Optional[str], act: Optional[str]
+    in_channels: int,
+    out_channels: int,
+    factor: int,
+    upsample_block_type: str,
+    norm: Optional[str],
+    act: Optional[str],
 ):
     layers: list[nn.Module] = [
         build_norm(norm, in_channels),
@@ -267,11 +312,16 @@ def build_decoder_project_out_block(
     elif factor == 2:
         layers.append(
             build_upsample_block(
-                block_type=upsample_block_type, in_channels=in_channels, out_channels=out_channels, shortcut=None
+                block_type=upsample_block_type,
+                in_channels=in_channels,
+                out_channels=out_channels,
+                shortcut=None,
             )
         )
     else:
-        raise ValueError(f"upsample factor {factor} is not supported for decoder project out")
+        raise ValueError(
+            f"upsample factor {factor} is not supported for decoder project out"
+        )
     return OpSequential(layers)
 
 
@@ -289,23 +339,36 @@ class Encoder(nn.Module):
 
         self.project_in = build_encoder_project_in_block(
             in_channels=cfg.in_channels,
-            out_channels=cfg.width_list[0] if cfg.depth_list[0] > 0 else cfg.width_list[1],
+            out_channels=cfg.width_list[0]
+            if cfg.depth_list[0] > 0
+            else cfg.width_list[1],
             factor=1 if cfg.depth_list[0] > 0 else 2,
             downsample_block_type=cfg.downsample_block_type,
         )
 
         self.stages: list[OpSequential] = []
         for stage_id, (width, depth) in enumerate(zip(cfg.width_list, cfg.depth_list)):
-            block_type = cfg.block_type[stage_id] if isinstance(cfg.block_type, list) else cfg.block_type
+            block_type = (
+                cfg.block_type[stage_id]
+                if isinstance(cfg.block_type, list)
+                else cfg.block_type
+            )
             stage = build_stage_main(
-                width=width, depth=depth, block_type=block_type, norm=cfg.norm, act=cfg.act, input_width=width
+                width=width,
+                depth=depth,
+                block_type=block_type,
+                norm=cfg.norm,
+                act=cfg.act,
+                input_width=width,
             )
 
             if stage_id < num_stages - 1 and depth > 0:
                 downsample_block = build_downsample_block(
                     block_type=cfg.downsample_block_type,
                     in_channels=width,
-                    out_channels=cfg.width_list[stage_id + 1] if cfg.downsample_match_channel else width,
+                    out_channels=cfg.width_list[stage_id + 1]
+                    if cfg.downsample_match_channel
+                    else width,
                     shortcut=cfg.downsample_shortcut,
                 )
                 stage.append(downsample_block)
@@ -314,7 +377,9 @@ class Encoder(nn.Module):
 
         self.project_out = build_encoder_project_out_block(
             in_channels=cfg.width_list[-1],
-            out_channels=2 * cfg.latent_channels if cfg.double_latent else cfg.latent_channels,
+            out_channels=2 * cfg.latent_channels
+            if cfg.double_latent
+            else cfg.latent_channels,
             norm=cfg.out_norm,
             act=cfg.out_act,
             shortcut=cfg.out_shortcut,
@@ -341,8 +406,12 @@ class Decoder(nn.Module):
         assert isinstance(cfg.block_type, str) or (
             isinstance(cfg.block_type, list) and len(cfg.block_type) == num_stages
         )
-        assert isinstance(cfg.norm, str) or (isinstance(cfg.norm, list) and len(cfg.norm) == num_stages)
-        assert isinstance(cfg.act, str) or (isinstance(cfg.act, list) and len(cfg.act) == num_stages)
+        assert isinstance(cfg.norm, str) or (
+            isinstance(cfg.norm, list) and len(cfg.norm) == num_stages
+        )
+        assert isinstance(cfg.act, str) or (
+            isinstance(cfg.act, list) and len(cfg.act) == num_stages
+        )
 
         self.project_in = build_decoder_project_in_block(
             in_channels=cfg.latent_channels,
@@ -351,18 +420,26 @@ class Decoder(nn.Module):
         )
 
         self.stages: list[OpSequential] = []
-        for stage_id, (width, depth) in reversed(list(enumerate(zip(cfg.width_list, cfg.depth_list)))):
+        for stage_id, (width, depth) in reversed(
+            list(enumerate(zip(cfg.width_list, cfg.depth_list)))
+        ):
             stage = []
             if stage_id < num_stages - 1 and depth > 0:
                 upsample_block = build_upsample_block(
                     block_type=cfg.upsample_block_type,
                     in_channels=cfg.width_list[stage_id + 1],
-                    out_channels=width if cfg.upsample_match_channel else cfg.width_list[stage_id + 1],
+                    out_channels=width
+                    if cfg.upsample_match_channel
+                    else cfg.width_list[stage_id + 1],
                     shortcut=cfg.upsample_shortcut,
                 )
                 stage.append(upsample_block)
 
-            block_type = cfg.block_type[stage_id] if isinstance(cfg.block_type, list) else cfg.block_type
+            block_type = (
+                cfg.block_type[stage_id]
+                if isinstance(cfg.block_type, list)
+                else cfg.block_type
+            )
             norm = cfg.norm[stage_id] if isinstance(cfg.norm, list) else cfg.norm
             act = cfg.act[stage_id] if isinstance(cfg.act, list) else cfg.act
             stage.extend(
@@ -373,7 +450,9 @@ class Decoder(nn.Module):
                     norm=norm,
                     act=act,
                     input_width=(
-                        width if cfg.upsample_match_channel else cfg.width_list[min(stage_id + 1, num_stages - 1)]
+                        width
+                        if cfg.upsample_match_channel
+                        else cfg.width_list[min(stage_id + 1, num_stages - 1)]
                     ),
                 )
             )
@@ -381,7 +460,9 @@ class Decoder(nn.Module):
         self.stages = nn.ModuleList(self.stages)
 
         self.project_out = build_decoder_project_out_block(
-            in_channels=cfg.width_list[0] if cfg.depth_list[0] > 0 else cfg.width_list[1],
+            in_channels=cfg.width_list[0]
+            if cfg.depth_list[0] > 0
+            else cfg.width_list[1],
             out_channels=cfg.in_channels,
             factor=1 if cfg.depth_list[0] > 0 else 2,
             upsample_block_type=cfg.upsample_block_type,
@@ -411,7 +492,9 @@ class DCAE(nn.Module):
 
     def load_model(self):
         if self.cfg.pretrained_source == "dc-ae":
-            state_dict = torch.load(self.cfg.pretrained_path, map_location="cpu", weights_only=True)["state_dict"]
+            state_dict = torch.load(
+                self.cfg.pretrained_path, map_location="cpu", weights_only=True
+            )["state_dict"]
             self.load_state_dict(state_dict)
         else:
             raise NotImplementedError
@@ -459,7 +542,9 @@ def dc_ae_f32c32(name: str, pretrained_path: str) -> DCAEConfig:
     else:
         raise NotImplementedError
     cfg = OmegaConf.from_dotlist(cfg_str.split(" "))
-    cfg: DCAEConfig = OmegaConf.to_object(OmegaConf.merge(OmegaConf.structured(DCAEConfig), cfg))
+    cfg: DCAEConfig = OmegaConf.to_object(
+        OmegaConf.merge(OmegaConf.structured(DCAEConfig), cfg)
+    )
     cfg.pretrained_path = pretrained_path
     return cfg
 
@@ -477,7 +562,9 @@ def dc_ae_f64c128(name: str, pretrained_path: Optional[str] = None) -> DCAEConfi
     else:
         raise NotImplementedError
     cfg = OmegaConf.from_dotlist(cfg_str.split(" "))
-    cfg: DCAEConfig = OmegaConf.to_object(OmegaConf.merge(OmegaConf.structured(DCAEConfig), cfg))
+    cfg: DCAEConfig = OmegaConf.to_object(
+        OmegaConf.merge(OmegaConf.structured(DCAEConfig), cfg)
+    )
     cfg.pretrained_path = pretrained_path
     return cfg
 
@@ -495,6 +582,8 @@ def dc_ae_f128c512(name: str, pretrained_path: Optional[str] = None) -> DCAEConf
     else:
         raise NotImplementedError
     cfg = OmegaConf.from_dotlist(cfg_str.split(" "))
-    cfg: DCAEConfig = OmegaConf.to_object(OmegaConf.merge(OmegaConf.structured(DCAEConfig), cfg))
+    cfg: DCAEConfig = OmegaConf.to_object(
+        OmegaConf.merge(OmegaConf.structured(DCAEConfig), cfg)
+    )
     cfg.pretrained_path = pretrained_path
     return cfg

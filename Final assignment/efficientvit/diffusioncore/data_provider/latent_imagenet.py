@@ -5,7 +5,10 @@ import numpy as np
 from torch.utils.data import Dataset
 from torchvision.datasets.folder import DatasetFolder
 
-from efficientvit.diffusioncore.data_provider.base import BaseDataProvider, BaseDataProviderConfig
+from efficientvit.diffusioncore.data_provider.base import (
+    BaseDataProvider,
+    BaseDataProviderConfig,
+)
 
 __all__ = ["LatentImageNetDataProviderConfig", "LatentImageNetDataProvider"]
 

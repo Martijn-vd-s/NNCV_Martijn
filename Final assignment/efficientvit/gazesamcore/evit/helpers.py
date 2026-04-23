@@ -52,7 +52,9 @@ class EvitResize:
         """
         Expects a torch tensor with shape HxWxC in float format.
         """
-        target_size = self.get_preprocess_shape(image.shape[0], image.shape[1], self.size)
+        target_size = self.get_preprocess_shape(
+            image.shape[0], image.shape[1], self.size
+        )
         return resize(image.permute(2, 0, 1), target_size)
 
     @staticmethod
@@ -87,7 +89,9 @@ def preprocess(x, img_size, device="cuda"):
     return x
 
 
-def resize_longest_image_size(input_image_size: torch.Tensor, longest_side: int) -> torch.Tensor:
+def resize_longest_image_size(
+    input_image_size: torch.Tensor, longest_side: int
+) -> torch.Tensor:
     input_image_size = input_image_size.to(torch.float32)
     scale = longest_side / torch.max(input_image_size)
     transformed_size = scale * input_image_size

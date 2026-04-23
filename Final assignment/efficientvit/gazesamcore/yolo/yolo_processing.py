@@ -1,7 +1,10 @@
 import numpy as np
 
 from efficientvit.gazesamcore.utils import ONNX, PYTORCH, TENSORRT
-from efficientvit.gazesamcore.yolo.runtime_variants import run_yolo_model_onnx, run_yolo_model_tensorrt
+from efficientvit.gazesamcore.yolo.runtime_variants import (
+    run_yolo_model_onnx,
+    run_yolo_model_tensorrt,
+)
 
 __all__ = ["get_yolo_bboxes", "get_bboxes"]
 
@@ -13,7 +16,9 @@ def get_yolo_bboxes(frame, model, mode, timer=None):
     if mode == PYTORCH:
         preds = model.predict(frame)
         pred_bboxes = preds.prediction.bboxes_xyxy.astype(int)
-        mask = ~(pred_bboxes[:, 0] == pred_bboxes[:, 2]) & ~(pred_bboxes[:, 1] == pred_bboxes[:, 3])
+        mask = ~(pred_bboxes[:, 0] == pred_bboxes[:, 2]) & ~(
+            pred_bboxes[:, 1] == pred_bboxes[:, 3]
+        )
         bboxes = pred_bboxes[mask]
 
     elif mode == ONNX:
@@ -25,7 +30,9 @@ def get_yolo_bboxes(frame, model, mode, timer=None):
         bboxes = get_bboxes(frame, pred_bboxes)
 
     else:
-        raise NotImplementedError(f"{mode} mode not implemented for YOLO object detection")
+        raise NotImplementedError(
+            f"{mode} mode not implemented for YOLO object detection"
+        )
 
     if timer is not None:
         timer.stop("yolo")

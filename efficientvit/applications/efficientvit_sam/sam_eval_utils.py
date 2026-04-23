@@ -72,9 +72,9 @@ def evaluate_predictions_on_coco(
     if max_dets_per_image is None:
         max_dets_per_image = [1, 10, 100]  # Default from COCOEval
     else:
-        assert (
-            len(max_dets_per_image) >= 3
-        ), "COCOeval requires maxDets (and max_dets_per_image) to have length at least 3"
+        assert len(max_dets_per_image) >= 3, (
+            "COCOeval requires maxDets (and max_dets_per_image) to have length at least 3"
+        )
 
         if max_dets_per_image[2] != 100:
             raise NotImplementedError
@@ -91,7 +91,9 @@ def evaluate_predictions_on_coco(
     return coco_eval
 
 
-def evaluate_predictions_on_lvis(lvis_gt, lvis_results, iou_type, max_dets_per_image=None, class_names=None):
+def evaluate_predictions_on_lvis(
+    lvis_gt, lvis_results, iou_type, max_dets_per_image=None, class_names=None
+):
     """
     Modified from https://github.com/facebookresearch/detectron2/blob/main/detectron2/evaluation/lvis_evaluation.py.
     Args:
@@ -138,7 +140,9 @@ class Clicker(object):
     Modified from https://github.com/SamsungLabs/ritm_interactive_segmentation/blob/b9b44603672e15aa0be878b54fd26e7e1c5d2311/isegm/inference/clicker.py#L7.
     """
 
-    def __init__(self, gt_mask=None, init_clicks=None, ignore_label=-1, click_indx_offset=0):
+    def __init__(
+        self, gt_mask=None, init_clicks=None, ignore_label=-1, click_indx_offset=0
+    ):
         self.click_indx_offset = click_indx_offset
         if gt_mask is not None:
             self.gt_mask = gt_mask == 1
@@ -161,8 +165,14 @@ class Clicker(object):
         return self.clicks_list[:clicks_limit]
 
     def _get_next_click(self, pred_mask, padding=True):
-        fn_mask = np.logical_and(np.logical_and(self.gt_mask, np.logical_not(pred_mask)), self.not_ignore_mask)
-        fp_mask = np.logical_and(np.logical_and(np.logical_not(self.gt_mask), pred_mask), self.not_ignore_mask)
+        fn_mask = np.logical_and(
+            np.logical_and(self.gt_mask, np.logical_not(pred_mask)),
+            self.not_ignore_mask,
+        )
+        fp_mask = np.logical_and(
+            np.logical_and(np.logical_not(self.gt_mask), pred_mask),
+            self.not_ignore_mask,
+        )
 
         if padding:
             fn_mask = np.pad(fn_mask, ((1, 1), (1, 1)), "constant")

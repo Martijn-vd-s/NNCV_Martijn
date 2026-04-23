@@ -138,7 +138,11 @@ def load_depth_model(mode, precision):
 
         encoder = "vitb"  # or 'vitb', 'vits'
         model = DepthAnything(model_configs[encoder])
-        model.load_state_dict(torch.load(f"{PYTORCH_MODEL_DIR}/depth_anything_{encoder}14.pth", weights_only=True))
+        model.load_state_dict(
+            torch.load(
+                f"{PYTORCH_MODEL_DIR}/depth_anything_{encoder}14.pth", weights_only=True
+            )
+        )
         model = model.eval().cuda()
         return model
 
@@ -155,12 +159,8 @@ def load_evit_model(
     if mode == TENSORRT:
         from efficientvit.gazesamcore.evit import TrtEvitSam
 
-        evit_encoder_model_path = (
-            f"{TRT_MODEL_DIR}/{encoder_precision}/evit_encoder_{model_type}_{encoder_precision}.engine"
-        )
-        evit_decoder_model_path = (
-            f"{TRT_MODEL_DIR}/{decoder_precision}/evit_decoder_{model_type}_{decoder_precision}.engine"
-        )
+        evit_encoder_model_path = f"{TRT_MODEL_DIR}/{encoder_precision}/evit_encoder_{model_type}_{encoder_precision}.engine"
+        evit_decoder_model_path = f"{TRT_MODEL_DIR}/{decoder_precision}/evit_decoder_{model_type}_{decoder_precision}.engine"
 
         evit_encoder = load_evit_encoder_engine(evit_encoder_model_path)
         evit_decoder = load_evit_decoder_engine(evit_decoder_model_path)
@@ -169,7 +169,11 @@ def load_evit_model(
         return model
 
     elif mode == ONNX:
-        from efficientvit.gazesamcore.evit import OnnxEvitSam, OnnxEvitSamDecoder, OnnxEvitSamEncoder
+        from efficientvit.gazesamcore.evit import (
+            OnnxEvitSam,
+            OnnxEvitSamDecoder,
+            OnnxEvitSamEncoder,
+        )
 
         evit_encoder_model_path = f"{ONNX_MODEL_DIR}/evit_encoder_{model_type}.onnx"
         evit_decoder_model_path = f"{ONNX_MODEL_DIR}/evit_decoder_{model_type}.onnx"

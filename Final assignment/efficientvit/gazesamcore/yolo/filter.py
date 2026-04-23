@@ -39,7 +39,9 @@ def filter_bboxes_gaze(bboxes, gaze_head, gaze_tail):
     return bboxes[inds == 1]
 
 
-def filter_bboxes_depth(bboxes, depth_map, eye_pos, depth_margin=20, min_overlap_ratio=0.5):
+def filter_bboxes_depth(
+    bboxes, depth_map, eye_pos, depth_margin=20, min_overlap_ratio=0.5
+):
     thresh = depth_map[int(eye_pos[1])][int(eye_pos[0])] - depth_margin
     depth_mask = (depth_map >= thresh).to(torch.int8)
     bbox_area = (bboxes[:, 3] - bboxes[:, 1] + 1) * (bboxes[:, 2] - bboxes[:, 0] + 1)

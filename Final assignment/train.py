@@ -354,6 +354,8 @@ def main(args):
 
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                 outputs = model(images)
+
+                # teacher disabled for a test to see impact it makes enable again for distillation (report uses distillation so enable this for final results)
                 # student_bottleneck = model._bottleneck  # set inside Model.forward()
 
                 # with torch.no_grad():

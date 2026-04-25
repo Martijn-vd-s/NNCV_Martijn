@@ -1,45 +1,140 @@
-# 5LSM0: Neural Networks for Computer Vision
+# NNCV Final Assignment - Cityscapes Semantic Segmentation
 
-Welcome to the repository for **5LSM0: Neural Networks for Computer Vision**, a course offered by the Department of Electrical Engineering at Eindhoven University of Technology. This course is hosted by the [Architectures for Relaible Image Analysis Lab](https://github.com/TUE-ARIA).
+**Course:** 5LSM0 Neural Networks for Computer Vision  
+**Author:** Martijn van de Sande (1730193)  
+**Institution:** Eindhoven University of Technology  
 
-## Overview
+This repository contains the code used for my final assignment in 5LSM0. Two segmentation models are trained on a Cityscapes-based dataset provided for the course.
 
-This repository contains all the assignments and supplementary materials for the course. The weekly assignments are designed as **Jupyter Notebooks**, providing practical, hands-on experience with the concepts discussed during lectures. These notebooks will help you gain familiarity with implementing neural networks using **PyTorch** in **Python**. For the final assignment, you will apply the knowledge gained throughout the course by coding in native Python and working with a compute cluster, providing valuable experience in real-world computational environments.
+1. **D3-Unet-v5** (`DINOv3-Unet_V5` branch) - A U-Net extended with multi-scale DINOv3-ViT-B/16 feature fusion, ASPP bottleneck, Squeeze-and-Excitation blocks, and sliding-window TTA inference. Achieves Mean Dice **0.566** on the course server.
+2. **enet v2** (`eff-Unet-V2` branch) - A compact distillation network where a frozen SegFormer-B5 teacher is distilled into an EfficientViT-B0 student using logit-level KD. Achieves **94.7 FPS** at **2.98 MB** and Mean Dice **0.417**.
 
-### Weekly Assignments
+> **Note on pretrained weights:** Pretrained weights are not included in this repository because the checkpoint files are too large for standard git tracking. Download links and expected file locations are listed in the setup section below.
 
-The weekly assignments are structured to guide you through foundational and advanced topics in neural networks for computer vision. These assignments are:
-- **Optional**: They are not mandatory but serve as valuable practice to build your coding skills.
-- **Hands-On**: Focused on applying theoretical knowledge from the lectures into real-world implementations.
+> **Note on branches:** Make sure you are on the right branch before training or evaluating. The `main` branch only has the course baseline. Each model version has its own branch. `DINOv3-Unet_V6` and `eff-Unet-V3` are extra branches used for testing and are not part of the report.
 
-### Final Assignment
+---
 
-The **final assignment** is the cornerstone of this course and accounts for **50% of your final grade**. In this project, you will:
-1. Work on a real-world problem using the **CityScapes dataset**.
-2. Train neural networks and validate their performance against established baselines.
-3. Document your results and insights in a detailed report.
+## Repository Structure
 
-This final assignment requires a deeper dive into the subject, pushing you to apply the knowledge and skills gained throughout the course.
+```text
+NNCV_Martijn/
+├── Final assignment/          # All assignment code lives here
+│   ├── train.py               # Training script
+│   ├── model.py               # Model architecture
+│   ├── evaluate.py            # Evaluation script
+│   ├── predict.py             # Inference script
+│   ├── predict_ood.py         # Out-of-distribution prediction
+│   ├── jobscript_slurm.sh     # Snellius SLURM job script
+│   ├── main.sh                # Called by jobscript, runs train.py with settings
+│   ├── main_eval.sh           # Runs evaluation
+│   ├── eval.sh                # Evaluation shell script
+│   ├── download_docker_and_data.sh  # Data download helper
+│   ├── Dockerfile             # Docker environment
+├── Weekly notebooks/          # Course weekly exercises (not part of the report)
+```
 
-The final assignment will start in week 3 (February 24th), once all core lectures have been completed, ensuring you have the necessary foundation to work on the project.
+---
 
-## Authors and Contact
+## Branch Overview
 
-This course material is developed and maintained by the following contributors:  
+Each branch is one development iteration. Always check out the correct branch before running anything.
 
-- **Cris H.B. Claessens**  
-  Email: [c.h.b.claessens@tue.nl](mailto:c.h.b.claessens@tue.nl)  
+| Branch | Model | Description | In report? |
+|--------|-------|-------------|------------|
+| `main` | baseline | Course-provided U-Net baseline | Yes |
+| `DINOv3-Unet_V2` | D3-Unet | DINOv3 added, CosineAnnealingLR, Dice loss | Yes |
+| `DINOv3-Unet_V3` | D3-Unet | Added SEB, ASPP, augmentation (had a normalisation bug) | Yes |
+| `DINOv3-Unet_V4` | D3-Unet | Normalisation fixed, TTA flipping added | Yes |
+| `DINOv3-Unet_V5` | D3-Unet | Full-resolution sliding-window inference, **main result** | Yes |
+| `DINOv3-Unet_V6` | D3-Unet | Extra testing, not used in the report | No |
+| `segB5-Unet-V6` | D3-Unet | Extra testing, not used in the report | No |
+| `eff-Unet-V1` | enet | MobileNetV3 backbone, turned out too large | Yes |
+| `eff-Unet-V2` | enet | EfficientViT-B0 backbone, **main enet result** | Yes |
+| `eff-Unet-V3` | enet | Extra testing, not used in the report | No |
 
-- **Tim J.M. Jaspers**  
-  Email: [t.j.m.jaspers@tue.nl](mailto:t.j.m.jaspers@tue.nl)
+---
 
-- **Francisco De Espírito Santo e Caetano**  
-  Email: [f.t.de.espirito.santo.e.caetano@tue.nl](mailto:f.t.de.espirito.santo.e.caetano@tue.nl)
+## Running on Snellius
 
-- **Lemar Abdi**  
-  Email: [l.abdi@tue.nl](mailto:l.abdi@tue.nl)
+All training was done on the [Snellius](https://www.surf.nl/en/dutch-national-supercomputer-snellius) national supercomputer. The setup uses Apptainer to run a container, so there is no conda environment to set up.
 
-- **dr. Christiaan G.A. Viviers**  
-  Email: [c.g.a.vivers@tue.nl](mailto:c.g.a.vivers@tue.nl)
+### 1. Clone and check out the right branch
 
-If you have questions or need assistance, you can always reach out to us via email. However, we strongly encourage you to post your questions in the **Discussions** section of this GitHub repository. This way, other students can benefit from the conversations and contribute by helping each other out.
+```bash
+git clone https://github.com/Martijn-vd-s/NNCV_Martijn.git
+cd NNCV_Martijn
+
+# For D3-Unet-v5:
+git checkout DINOv3-Unet_V5
+
+# For enet:
+git checkout eff-Unet-V2
+```
+
+### 2. Download pretrained weights
+
+**DINOv3-ViT-B/16** (used in D3-Unet-v5)  
+Get it from the official repo: https://github.com/facebookresearch/dinov3  
+Follow the instructions there to download the `dinov3_vitb16` checkpoint and place it in `Final assignment/`.
+
+**EfficientViT-B0** (used in enet)  
+Get it from: https://github.com/CVHub520/efficientvit  
+Place the `b0.pt` checkpoint in `Final assignment/`.
+
+**SegFormer-B5 teacher** (used in enet)  
+
+```bash
+python -c "
+from transformers import SegformerForSemanticSegmentation
+SegformerForSemanticSegmentation.from_pretrained(
+    'nvidia/segformer-b5-finetuned-cityscapes-1024-1024',
+    cache_dir='Final assignment/mit-b5'
+)"
+```
+
+### 3. Get the dataset
+
+```bash
+cd "Final assignment"
+bash download_docker_and_data.sh
+```
+
+### 4. Submit the training job
+
+```bash
+cd "Final assignment"
+sbatch jobscript_slurm.sh
+```
+
+This submits the training job on Snellius with an A100 GPU and the configured time limit. The job script then calls `main.sh` which runs `train.py` with all the training settings. No further configuration is needed.
+
+---
+
+## Evaluation
+
+```bash
+cd "Final assignment"
+bash main_eval.sh
+```
+
+This reports Mean Dice averaged over the seven category groups from the course server: flat, construction, object, nature, sky, human, and vehicle.
+
+---
+
+## Results
+
+| Model | mDice | mIoU | Size (MB) | GFLOPs | FPS |
+|-------|-------|------|-----------|--------|-----|
+| Baseline U-Net | 0.478 | 0.392 | 65.93 | 2563.6 | 8.83 |
+| D3-Unet-v5 | 0.566 | 0.460 | 431.3 | 4127.1 | 2.01 |
+| enet v2 | 0.417 | 0.324 | 2.98 | 10.79 | 94.72 |
+
+All results are from the course submission server on 500 test images.
+
+---
+
+## Notes
+
+- D3-Unet-v5 completed 16 out of 100 scheduled epochs due to compute time limits. The best checkpoint by validation loss was used for submission.
+- `DINOv3-Unet_V6`, `segB5-Unet-V6`, and `eff-Unet-V3` are extra experiments for testing and not part of the report.

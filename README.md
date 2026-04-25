@@ -40,18 +40,18 @@ NNCV_Martijn/
 
 Each branch is one development iteration. Always check out the correct branch before running anything.
 
-| Branch | Model | Description | In report? |
-|--------|-------|-------------|------------|
-| `main` | baseline | Course-provided U-Net baseline | Yes |
-| `DINOv3-Unet_V2` | D3-Unet | DINOv3 added, CosineAnnealingLR, Dice loss | Yes |
-| `DINOv3-Unet_V3` | D3-Unet | Added SEB, ASPP, augmentation (had a normalisation bug) | Yes |
-| `DINOv3-Unet_V4` | D3-Unet | Normalisation fixed, TTA flipping added | Yes |
-| `DINOv3-Unet_V5` | D3-Unet | Full-resolution sliding-window inference, **main result** | Yes |
-| `DINOv3-Unet_V6` | D3-Unet | Extra testing, not used in the report | No |
-| `segB5-Unet-V6` | D3-Unet | Extra testing, not used in the report | No |
-| `eff-Unet-V1` | enet | MobileNetV3 backbone, turned out too large | Yes |
-| `eff-Unet-V2` | enet | EfficientViT-B0 backbone, **main enet result** | Yes |
-| `eff-Unet-V3` | enet | Extra testing, not used in the report | No |
+| Branch         | Model   | Description                                             | In report? |
+| -------------- | ------- | ------------------------------------------------------- | ---------- |
+| main           | D3-Unet | V1 - DINOv3 added to the baseline, no scheduler yet     | Yes        |
+| DINOv3-Unet_V2 | D3-Unet | CosineAnnealingLR and Dice loss added                   | Yes        |
+| DINOv3-Unet_V3 | D3-Unet | Added SEB, ASPP, augmentation (had a normalisation bug) | Yes        |
+| DINOv3-Unet_V4 | D3-Unet | Normalisation fixed, TTA flipping added                 | Yes        |
+| DINOv3-Unet_V5 | D3-Unet | Full-resolution sliding-window inference, main result   | Yes        |
+| DINOv3-Unet_V6 | D3-Unet | Extra testing, not used in the report                   | No         |
+| segB5-Unet-V6  | D3-Unet | Extra testing, not used in the report                   | No         |
+| eff-Unet-V1    | enet    | MobileNetV3 backbone, turned out too large              | Yes        |
+| eff-Unet-V2    | enet    | EfficientViT-B0 backbone, main enet result              | Yes        |
+| eff-Unet-V3    | enet    | Extra testing, not used in the report                   | No         |
 
 ---
 

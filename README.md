@@ -133,7 +133,18 @@ This reports Mean Dice averaged over the seven category groups from the course s
 All results are from the course submission server on 500 test images.
 
 ---
+## Leaderboard Submissions
 
+| Benchmark | Username | Model |
+|---|---|---|
+| Peak performance | MvdS_D3-Unet-v5_Peak | D3-Unet-v5 (branch: DINOv3-Unet_V5) |
+| Efficiency | MvdS_eNet_V1.6 | enet v2 (branch: eff-Unet-V2) |
+
+**Author:** Martijn van de Sande  
+**Student number:** 1730193  
+**TU/e email:** m.v.d.sande@student.tue.nl
+
+---
 ## Notes
 
 - D3-Unet-v5 completed 16 out of 100 scheduled epochs due to compute time limit in the slurm script.  Further training would likely give small gains and was not considered worth the additional compute given the already stable behaviour. The best checkpoint by validation loss was used for submission. 

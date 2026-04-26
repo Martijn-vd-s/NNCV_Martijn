@@ -135,7 +135,7 @@ All results are from the course submission server on 500 test images.
 ---
 ## Leaderboard Submissions
 
-| Benchmark | Username | Model |
+| Benchmark | Team name | Model |
 |---|---|---|
 | Peak performance | MvdS_D3-Unet-v5_Peak | D3-Unet-v5 (branch: DINOv3-Unet_V5) |
 | Efficiency | MvdS_eNet_V1.6 | enet v2 (branch: eff-Unet-V2) |

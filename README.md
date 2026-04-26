@@ -136,5 +136,5 @@ All results are from the course submission server on 500 test images.
 
 ## Notes
 
-- D3-Unet-v5 completed 16 out of 100 scheduled epochs due to compute time limits. The best checkpoint by validation loss was used for submission.
+- D3-Unet-v5 completed 16 out of 100 scheduled epochs due to compute time limit in the slurm script.  Further training would likely give small gains and was not considered worth the additional compute given the already stable behaviour. The best checkpoint by validation loss was used for submission. 
 - `DINOv3-Unet_V6`, `segB5-Unet-V6`, and `eff-Unet-V3` are extra experiments for testing and not part of the report.
